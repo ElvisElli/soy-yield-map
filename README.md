@@ -10,6 +10,9 @@ yield — and the app shows the model-predicted yield at that location, how thei
 yield compares (the **yield gap**), and how much they could gain by shifting
 maturity group or planting date.
 
+![The soy-yield-map app: yield-distribution plots above a cardinal-red map of
+predicted soybean yield across Arkansas](docs/screenshot.png)
+
 The repository has **two loosely-coupled components** so each can evolve
 independently:
 
@@ -93,12 +96,20 @@ predicted yield. The grower:
 2. Selects **maturity group** and **planting date** (their current practice).
 3. Enters **their own yield** (bu/ac or kg/ha).
 
-The app finds the nearest simulated grid cell and reports:
+The app finds the nearest simulated grid cell and shows, above a filled
+cardinal-red yield map of Arkansas:
 
-- **Predicted yield** at the field for the chosen practice.
-- **Your gap** = predicted − reported (are you leaving yield on the table?).
-- **Best practice here** = the highest-yielding MG × planting-date combination at
-  that cell, and the **potential gain** from switching to it.
+- A **boxplot** of the simulated 40-year yield distribution for every practice at
+  that cell, with the grower's reported yield drawn as a reference line — the
+  **yield gap** is the distance between the two.
+- **Year-type small multiples**: for each practice, the yield in a *bad* year
+  (10th percentile), a *typical* year (median) and a *good* year (90th
+  percentile) — the yield potential a grower can plan around.
+- A narrative summary: predicted yield, the gap, and the **adaptation upside**
+  from earlier planting / a longer maturity group under +2 °C warming.
+
+The interface is styled in **University of Arkansas cardinal (#9D2235)** so the
+map and figures can be embedded directly in a university web page.
 
 ### Run locally
 

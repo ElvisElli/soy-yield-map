@@ -34,7 +34,7 @@ jobs:
 
       - name: Install shinylive + app dependencies
         run: |
-          install.packages(c("shinylive", "shiny", "bslib", "bsicons", "leaflet"))
+          install.packages(c("shinylive", "shiny", "bslib", "bsicons", "leaflet", "ggplot2"))
         shell: Rscript {0}
 
       - name: Export app to a static shinylive site

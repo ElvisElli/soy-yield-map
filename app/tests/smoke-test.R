@@ -33,7 +33,17 @@ stopifnot(nrow(bp) >= 1, all(diff(bp$yield_mean_kgha) <= 0))
 cat(sprintf("[ok] practices_at_cell: best +2C = %s @ %.0f kg/ha\n",
             practice_label(bp[1, ]), bp$yield_mean_kgha[1]))
 
-## 2. Full reactive server test -----------------------------------------------
+## 2. Plot builders ------------------------------------------------------------
+source("R/plots.R")
+crows <- surface[surface$cellid == nc$cellid &
+                   (surface$co2 == 350L | surface$scenario == "baseline"), ]
+gb <- make_boxplot(crows, observed_kgha = 3000, unit = "bu/ac", highlight = "baseline")
+gy <- make_yeartype_plot(crows, unit = "bu/ac")
+stopifnot(inherits(gb, "ggplot"), inherits(gy, "ggplot"))
+ggplot2::ggplot_build(gb); ggplot2::ggplot_build(gy)  # force evaluation
+cat("[ok] plots: boxplot + year-type build without error\n")
+
+## 3. Full reactive server test ------------------------------------------------
 app <- source("app.R", local = new.env())$value
 testServer(app, {
   session$setInputs(lat = 34.75, lon = -91.5, climate = "current",
@@ -41,17 +51,18 @@ testServer(app, {
                     myyield = 45, unit = "bu/ac")
   stopifnot(!is.null(cell()))
   stopifnot(!is.null(pred_row()))
-  pred <- output$vb_pred
-  gap  <- output$vb_gap
-  ups  <- output$vb_upside
-  cat(sprintf("[ok] server current: pred=%s gap=%s upside=%s\n", pred, gap, ups))
-  stopifnot(nzchar(pred), pred != "not simulated")
+  stopifnot(nrow(cell_rows()) > 0)
+  stopifnot(identical(selected_scenario(), "baseline"))
+  cat(sprintf("[ok] server current: cell_rows=%d, scenario=%s\n",
+              nrow(cell_rows()), selected_scenario()))
 
   ## Switch to warming + adaptation practice
   session$setInputs(climate = "plus2C", mg = "MG5", window = "late April",
                     co2 = "350")
   stopifnot(!is.null(pred_row()))
-  cat(sprintf("[ok] server +2C MG5/late April: pred=%s\n", output$vb_pred))
+  stopifnot(identical(selected_scenario(), "early_sowing_longer_mat"))
+  cat(sprintf("[ok] server +2C MG5/late April: scenario=%s\n",
+              selected_scenario()))
 })
 
 cat("\nALL SMOKE TESTS PASSED\n")
