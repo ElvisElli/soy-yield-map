@@ -18,9 +18,11 @@
 library(shiny)
 library(bslib)
 library(leaflet)
+library(ggplot2)
 
-## Helpers (unit conversion, nearest-cell lookup, practice lookup)
+## Helpers (unit conversion, nearest-cell lookup, practice lookup) + UARK plots
 source("R/helpers.R", local = TRUE)
+source("R/plots.R", local = TRUE)
 
 ## ── Load the yield surface (base read.csv keeps webR/shinylive happy) ─────
 SURFACE <- read.csv("data/yield-surface.csv", stringsAsFactors = FALSE)
@@ -38,13 +40,15 @@ co2_choices    <- function(clim) sort(unique(SURFACE$co2[SURFACE$climate == clim
 
 AR_CENTER <- list(lng = mean(range(CELLS$x)), lat = mean(range(CELLS$y)))
 
-pal <- leaflet::colorBin("viridis", domain = NULL,
-                         bins = yield_bins_kgha, na.color = "#cccccc")
+## UARK cardinal sequential palette for the yield surface (continuous)
+YIELD_RANGE <- range(SURFACE$yield_mean_kgha, na.rm = TRUE)
+pal <- leaflet::colorNumeric(UARK$ramp, domain = YIELD_RANGE, na.color = "#e6e6e6")
 
 ## ── UI ───────────────────────────────────────────────────────────────────
 ui <- page_sidebar(
   title = "Arkansas Soybean Yield-Gap Map",
-  theme = bs_theme(version = 5, bootswatch = "flatly", primary = "#2c6e49"),
+  theme = bs_theme(version = 5, bootswatch = "flatly",
+                   primary = "#9D2235", secondary = "#54585A"),
 
   sidebar = sidebar(
     width = 340,
@@ -79,22 +83,21 @@ ui <- page_sidebar(
     helpText(textOutput("provenance", inline = TRUE))
   ),
 
-  layout_column_wrap(
-    width = 1/4, fill = FALSE,
-    value_box("Predicted yield here", textOutput("vb_pred"),
-              showcase = bsicons::bs_icon("geo-alt"), theme = "primary"),
-    value_box("Your reported yield", textOutput("vb_you"),
-              showcase = bsicons::bs_icon("clipboard-data"), theme = "secondary"),
-    value_box("Your yield gap", textOutput("vb_gap"),
-              showcase = bsicons::bs_icon("arrows-expand"), theme = "info"),
-    value_box("Adaptation upside (+2 °C)", textOutput("vb_upside"),
-              showcase = bsicons::bs_icon("graph-up-arrow"), theme = "success")
+  ## ── Plots (above the map) ────────────────────────────────────────────
+  card(
+    card_header(textOutput("plots_header", inline = TRUE)),
+    plotOutput("boxplot", height = 300),
+    plotOutput("yeartype", height = 260)
   ),
+
+  ## ── Map ──────────────────────────────────────────────────────────────
   card(
     full_screen = TRUE,
     card_header("Predicted soybean yield across Arkansas — selected practice"),
-    leafletOutput("map", height = 520)
+    leafletOutput("map", height = 500)
   ),
+
+  ## ── Narrative ────────────────────────────────────────────────────────
   card(
     card_header("What this means for your field"),
     uiOutput("explain")
@@ -159,28 +162,35 @@ server <- function(input, output, session) {
     if (nrow(p) == 0) NULL else p[1, , drop = FALSE]
   })
 
-  ## ── Value boxes ─────────────────────────────────────────────────────────
-  output$vb_pred <- renderText({
-    pr <- pred_row()
-    if (is.null(pr)) "not simulated" else fmt_yield(pr$yield_mean_kgha, input$unit)
+  ## ── Plots (simulated distribution vs observed; year-type potential) ─────
+  ## All simulated practices at the selected cell (baseline + adaptations),
+  ## at the selected CO2 (baseline is CO2 350 only, always included).
+  cell_rows <- reactive({
+    c <- cell(); req(c)
+    SURFACE[SURFACE$cellid == c$cellid &
+              (SURFACE$co2 == co2_sel() | SURFACE$scenario == "baseline"), ]
   })
-  output$vb_you <- renderText({
-    v <- my_kgha(); if (is.na(v)) "—" else fmt_yield(v, input$unit)
+  selected_scenario <- reactive({
+    pr <- pred_row(); if (is.null(pr)) NA_character_ else pr$scenario[1]
   })
-  output$vb_gap <- renderText({
-    pr <- pred_row(); v <- my_kgha()
-    if (is.null(pr) || is.na(v)) return("—")
-    gap <- pr$yield_mean_kgha - v
-    sign <- if (gap >= 0) "+" else "−"
-    paste0(sign, sub("^-", "", fmt_yield(abs(gap), input$unit)))
+
+  output$plots_header <- renderText({
+    c <- cell()
+    if (is.null(c)) "Yield distribution" else
+      sprintf("Yield distribution at your field (nearest cell %.1f km away)",
+              c$dist_km)
   })
-  output$vb_upside <- renderText({
-    b <- baseline_row(); bp <- best_plus2()
-    if (is.null(b) || is.null(bp)) return("—")
-    gain <- bp$yield_mean_kgha - b$yield_mean_kgha
-    sign <- if (gain >= 0) "+" else "−"
-    paste0(sign, sub("^-", "", fmt_yield(abs(gain), input$unit)))
-  })
+
+  output$boxplot <- renderPlot({
+    rows <- cell_rows(); req(nrow(rows) > 0)
+    make_boxplot(rows, observed_kgha = my_kgha(), unit = input$unit,
+                 highlight = selected_scenario())
+  }, res = 96)
+
+  output$yeartype <- renderPlot({
+    rows <- cell_rows(); req(nrow(rows) > 0)
+    make_yeartype_plot(rows, unit = input$unit)
+  }, res = 96)
 
   ## ── Practice availability note ─────────────────────────────────────────
   output$practice_note <- renderUI({
@@ -205,32 +215,48 @@ server <- function(input, output, session) {
     d
   })
 
+  ## Legend values in the user's unit; palette stays keyed on kg/ha internally
+  legend_vals <- reactive(seq(YIELD_RANGE[1], YIELD_RANGE[2], length.out = 5))
+
   output$map <- renderLeaflet({
-    d <- isolate(map_data())
-    leaflet(d) |>
-      addProviderTiles(providers$CartoDB.Positron) |>
-      addCircleMarkers(
-        lng = ~x, lat = ~y, radius = 4, stroke = FALSE, fillOpacity = 0.75,
-        fillColor = ~pal(yield_mean_kgha),
-        label = ~sprintf("%.1f bu/ac", kgha_to_buac(yield_mean_kgha))) |>
-      addLegend("bottomright", pal = pal, values = yield_bins_kgha,
-                title = "Yield (kg/ha)", opacity = 0.9) |>
+    leaflet(options = leafletOptions(minZoom = 6, maxZoom = 12,
+                                     preferCanvas = TRUE)) |>
+      addProviderTiles(providers$CartoDB.PositronNoLabels,
+                       group = "Clean") |>
+      addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") |>
+      addLayersControl(baseGroups = c("Clean", "Satellite"),
+                       options = layersControlOptions(collapsed = TRUE)) |>
       setView(AR_CENTER$lng, AR_CENTER$lat, zoom = 7)
   })
 
-  ## Redraw coloured points when the practice changes
+  ## Draw the filled yield surface (grid tiles) for the selected practice
   observe({
     d <- map_data()
+    unit <- input$unit
+    fmt_v <- function(v) vapply(v, function(x) fmt_yield(x, unit), character(1))
+    labs <- sprintf("<b>%s</b><br>%s",
+                    fmt_v(d$yield_mean_kgha),
+                    ifelse(is.na(d$yield_median_kgha), "",
+                           paste0("median ", fmt_v(d$yield_median_kgha))))
     leafletProxy("map", data = d) |>
       clearGroup("cells") |>
+      removeControl("yield-legend") |>
       addCircleMarkers(
         group = "cells",
-        lng = ~x, lat = ~y, radius = 4, stroke = FALSE, fillOpacity = 0.75,
+        lng = ~x, lat = ~y, radius = 5, stroke = FALSE, fillOpacity = 0.9,
         fillColor = ~pal(yield_mean_kgha),
-        label = ~sprintf("%.1f bu/ac", kgha_to_buac(yield_mean_kgha)))
+        label = lapply(labs, htmltools::HTML)) |>
+      addLegend("bottomright", layerId = "yield-legend",
+                colors = pal(legend_vals()),
+                labels = vapply(legend_vals(),
+                                function(v) fmt_yield(v, unit), character(1)),
+                title = paste0("Predicted yield<br>(", unit, ")"),
+                opacity = 0.9)
   })
 
-  ## Farm marker + click-to-set
+  ## Prominent cardinal farm marker + click-to-set
+  farm_icon <- makeAwesomeIcon(icon = "map-marker", markerColor = "darkred",
+                               iconColor = "#ffffff", library = "fa")
   observe({
     c <- cell(); req(c)
     pr <- pred_row()
@@ -238,9 +264,11 @@ server <- function(input, output, session) {
            else fmt_yield(pr$yield_mean_kgha, input$unit)
     leafletProxy("map") |>
       clearGroup("farm") |>
-      addMarkers(group = "farm", lng = input$lon, lat = input$lat,
-                 popup = paste0("<b>Your field</b><br>Predicted: ", txt,
-                                "<br>Nearest cell: ", round(c$dist_km, 1), " km"))
+      addAwesomeMarkers(group = "farm", lng = input$lon, lat = input$lat,
+                        icon = farm_icon,
+                        popup = paste0("<b>Your field</b><br>Predicted: ", txt,
+                                       "<br>Nearest cell: ",
+                                       round(c$dist_km, 1), " km"))
   })
 
   observeEvent(input$map_click, {

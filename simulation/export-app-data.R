@@ -99,8 +99,16 @@ surface <- df %>%
   summarise(
     yield_mean_kgha = round(mean(Yield_kgha), 1),
     yield_sd_kgha   = round(stats::sd(Yield_kgha), 1),
+    ## Full 5-number summary (+ p10/p90) so the app can draw boxplots and
+    ## "year type" (bad / typical / good) breakdowns without shipping the raw
+    ## 40-year series for every cell.
+    yield_min_kgha  = round(min(Yield_kgha), 1),
     yield_p10_kgha  = round(stats::quantile(Yield_kgha, 0.10, names = FALSE), 1),
+    yield_p25_kgha  = round(stats::quantile(Yield_kgha, 0.25, names = FALSE), 1),
+    yield_median_kgha = round(stats::median(Yield_kgha), 1),
+    yield_p75_kgha  = round(stats::quantile(Yield_kgha, 0.75, names = FALSE), 1),
     yield_p90_kgha  = round(stats::quantile(Yield_kgha, 0.90, names = FALSE), 1),
+    yield_max_kgha  = round(max(Yield_kgha), 1),
     n_years         = dplyr::n(),
     .groups = "drop"
   ) %>%
