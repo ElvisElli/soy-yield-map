@@ -1,0 +1,57 @@
+name: Deploy Shiny app to GitHub Pages
+
+# Builds app/ into a static WebAssembly site with shinylive and publishes it to
+# GitHub Pages. The app then runs entirely in the visitor's browser — no server.
+#
+# One-time setup: repo Settings ▸ Pages ▸ Source = "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "release"
+
+      - name: Install shinylive + app dependencies
+        run: |
+          install.packages(c("shinylive", "shiny", "bslib", "bsicons", "leaflet"))
+        shell: Rscript {0}
+
+      - name: Export app to a static shinylive site
+        run: |
+          shinylive::export("app", "_site")
+        shell: Rscript {0}
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

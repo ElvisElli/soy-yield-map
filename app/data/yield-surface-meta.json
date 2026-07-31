@@ -1,0 +1,9 @@
+{
+  "generated": "2026-07-31",
+  "n_cells": 4651,
+  "n_rows": 41859,
+  "years": "1985-2024",
+  "scenarios": ["baseline", "climate_change", "early_sowing", "early_sowing_longer_mat", "longer_mat"],
+  "source": "APSIM Next Generation grid simulation (soybean-ar-climate-change)"
+}
+
