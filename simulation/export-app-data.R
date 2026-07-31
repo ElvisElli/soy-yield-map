@@ -19,7 +19,11 @@
 suppressPackageStartupMessages({
   library(dplyr)
   library(readr)
+  library(sf)
 })
+
+## Projected CRS used by the manuscript maps (NAD83 / Conus Albers, metres)
+ALBERS <- 5070
 
 ## ── Locate repo root (works from repo root or from simulation/) ──────────
 find_root <- function() {
@@ -40,8 +44,13 @@ ROOT <- find_root()
 message("[export] repo root: ", ROOT)
 
 IN_RDS  <- file.path(ROOT, "simulation", "data", "outputs", "simulated-scenarios-df.rds")
+CROP    <- file.path(ROOT, "simulation", "data", "raw", "cropland")
+STATE_SHP    <- file.path(CROP, "cb_2018_us_state_20m", "cb_2018_us_state_20m.shp")
+COUNTY_SHP   <- file.path(CROP, "Elvis-Crop-Data", "Arkansas_Counties_4269.shp")
 OUT_CSV <- file.path(ROOT, "app", "data", "yield-surface.csv")
 OUT_META<- file.path(ROOT, "app", "data", "yield-surface-meta.json")
+OUT_STATE   <- file.path(ROOT, "app", "data", "ar-state.csv")
+OUT_COUNTY  <- file.path(ROOT, "app", "data", "ar-counties.csv")
 
 if (!file.exists(IN_RDS)) {
   stop("Simulation results not found:\n  ", IN_RDS,
@@ -123,10 +132,51 @@ message(sprintf("[export] surface: %s rows (%s cells, %s practices)",
                 dplyr::n_distinct(surface$cellid),
                 dplyr::n_distinct(paste(surface$scenario, surface$co2))))
 
+## ── Project cell centroids to Albers (matches manuscript maps) ────────────
+message("[export] projecting cells to EPSG:", ALBERS, " ...")
+cell_xy <- surface %>% distinct(cellid, x, y)
+alb <- sf::st_as_sf(cell_xy, coords = c("x", "y"), crs = 4326) %>%
+  sf::st_transform(ALBERS) %>%
+  sf::st_coordinates()
+cell_xy$x_alb <- round(alb[, 1], 1)
+cell_xy$y_alb <- round(alb[, 2], 1)
+surface <- surface %>% left_join(cell_xy[c("cellid", "x_alb", "y_alb")], by = "cellid")
+
 ## ── Write outputs ────────────────────────────────────────────────────────
 dir.create(dirname(OUT_CSV), recursive = TRUE, showWarnings = FALSE)
 readr::write_csv(surface, OUT_CSV)
 message("[export] wrote ", OUT_CSV, " (", round(file.size(OUT_CSV) / 1024), " KB)")
+
+## ── Fortify AR state + county boundaries to plain data frames ─────────────
+## Stored in Albers so the Shiny app can draw them with geom_polygon/geom_path
+## and never needs the sf package itself (keeps the shinylive build light).
+fortify_sf <- function(geom) {
+  co <- as.data.frame(sf::st_coordinates(geom))
+  ## Build a unique ring id from whatever hierarchy columns are present
+  idc <- intersect(c("L3", "L2", "L1"), names(co))
+  co$group <- do.call(paste, c(co[idc], sep = "_"))
+  data.frame(x = round(co$X, 1), y = round(co$Y, 1),
+             group = co$group, stringsAsFactors = FALSE)
+}
+
+if (file.exists(STATE_SHP) && file.exists(COUNTY_SHP)) {
+  ark <- sf::st_read(STATE_SHP, quiet = TRUE)
+  ark <- ark[ark$STUSPS == "AR", ]
+  ark <- sf::st_transform(ark, ALBERS)
+  readr::write_csv(fortify_sf(sf::st_geometry(ark)), OUT_STATE)
+  message("[export] wrote ", OUT_STATE)
+
+  cty <- sf::st_read(COUNTY_SHP, quiet = TRUE)
+  cty <- sf::st_transform(cty, ALBERS)
+  ## Light simplification keeps the file small without visible loss at map scale
+  cty <- sf::st_make_valid(cty)
+  cty <- sf::st_simplify(cty, dTolerance = 200, preserveTopology = TRUE)
+  cty_geom <- sf::st_collection_extract(sf::st_geometry(cty), "POLYGON")
+  readr::write_csv(fortify_sf(cty_geom), OUT_COUNTY)
+  message("[export] wrote ", OUT_COUNTY)
+} else {
+  message("[export] NOTE: boundary shapefiles not found — skipping state/county export")
+}
 
 year_range <- "1985-2024"
 if ("Date" %in% names(df)) {

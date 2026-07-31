@@ -96,21 +96,30 @@ predicted yield. The grower:
 2. Selects **maturity group** and **planting date** (their current practice).
 3. Enters **their own yield** (bu/ac or kg/ha).
 
-The app finds the nearest simulated grid cell and shows, above a filled
-cardinal-red yield map of Arkansas:
+The app finds the nearest simulated grid cell and shows:
 
-- A simple **boxplot** comparing the simulated 40-year yield distribution for the
-  grower's selected practice against their own reported yield — the **yield gap**
-  is the distance between the two.
-- A narrative summary: the simulated mean, its typical (10th–90th percentile)
-  range, and how the grower's reported yield compares.
+- A **boxplot** of the simulated 40-year yield distribution for the grower's
+  selected practice, the grower's reported yield as a **bar**, and a left-hand
+  **summary card** with the potential (simulated mean), real (reported) and
+  **yield gap**. The y-axis is fixed at **0–120 bu/ac** for easy comparison.
+- A **map** rendered like the study's manuscript figures — EPSG:5070 (Conus
+  Albers), **Arkansas state fill + county outlines**, a cardinal-red yield
+  raster, and the field marked — cropped to the eastern (soybean) half of the
+  state, exactly matching the paper's `coord_sf(xlim = c(360000, 570000))`.
+- A narrative summary of the simulated mean, its typical range, and the gap.
 
 The interface is styled in **University of Arkansas cardinal (#9D2235)** so the
 map and figure can be embedded directly in a university web page.
 
+**Grain moisture:** APSIM reports `Yield_kgha` as *dry* grain (0% moisture).
+Bushels are a market unit defined at **13% moisture**, so the app grosses the
+simulated yields up to 13% before display — putting them on the same basis as a
+grower's measured, market-moisture yield (1 bu/ac = 67.25 kg/ha at 13%).
+
 > This first version focuses on the **current-climate baseline**. The warming
-> (+2 °C) scenarios and the year-type breakdown are still produced by the
-> simulation and can be layered back into the app when needed.
+> (+2 °C) scenarios are still produced by the simulation and can be layered back
+> into the app when needed. The map uses only `ggplot2` (projection and
+> boundaries are pre-baked by the export), so the app needs no `sf`/`leaflet`.
 
 ### Run locally
 

@@ -18,9 +18,9 @@ const { chromium } = require('playwright');
     ignoreHTTPSErrors: true,
   });
   await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
-  // Give Shiny reactives + Leaflet tiles time to render
-  await page.waitForSelector('.leaflet-container', { timeout: 30000 });
-  await page.waitForTimeout(12000);
+  // Wait for the Shiny plot images (boxplot + map) to render
+  await page.waitForSelector('.shiny-plot-output img', { timeout: 30000 });
+  await page.waitForTimeout(4000);
   await page.screenshot({ path: out, fullPage: false });
   console.log('screenshot saved to', out);
   await browser.close();

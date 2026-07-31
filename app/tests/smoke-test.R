@@ -48,11 +48,14 @@ testServer(app, {
   session$setInputs(lat = 34.75, lon = -91.5, mg = "MG4", window = "late May",
                     myyield = 45, unit = "bu/ac")
   stopifnot(!is.null(cell()))
+  stopifnot(!is.null(cell()$x_alb))          # projected coords available
   pr <- pred_row()
   stopifnot(!is.null(pr), identical(pr$scenario, "baseline"))
-  stopifnot(nrow(map_data()) > 100)
-  cat(sprintf("[ok] server: scenario=%s, sim mean=%.0f kg/ha, map cells=%d\n",
-              pr$scenario, pr$yield_mean_kgha, nrow(map_data())))
+  stopifnot(nrow(map_cells()) > 100)
+  ## yields grossed to 13% moisture -> higher than the raw dry values
+  cat(sprintf("[ok] server: scenario=%s, sim mean(13%%)=%.0f kg/ha (%.1f bu/ac), map cells=%d\n",
+              pr$scenario, pr$yield_mean_kgha, pr$yield_mean_kgha / 67.25,
+              nrow(map_cells())))
 })
 
 cat("\nALL SMOKE TESTS PASSED\n")

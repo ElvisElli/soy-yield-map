@@ -64,7 +64,8 @@ Defined in `data/raw/scenarios/soy-scenarios-10-24.xlsx`:
 ## Required R packages
 
 `apsimx`, `doParallel`, `foreach`, `dplyr`, `readr`, `readxl`, `parallel`,
-`data.table`. The `export-app-data.R` step needs only `dplyr` + `readr`.
+`data.table`. The `export-app-data.R` step needs `dplyr`, `readr` and `sf`
+(to project cells and the state/county boundaries to EPSG:5070 for the app).
 
 ## Files
 

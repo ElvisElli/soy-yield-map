@@ -4,23 +4,27 @@
 ## A farmer enters their field location, their maturity group / planting date,
 ## and their own measured yield. The app shows the APSIM-simulated yield
 ## distribution at that location for the selected practice, and how their
-## reported yield compares (the yield gap).
+## reported yield compares (the yield gap), on a map styled like the study's
+## manuscript figures (state + county boundaries, eastern-Arkansas crop).
 ##
-## Single-file Shiny app. Runs three ways from the SAME source:
-##   • locally:            shiny::runApp("app")
-##   • Shiny Server / io:  deploy the app/ folder
-##   • static (Pages):     compiled to WebAssembly by shinylive (see .github)
+## Yield note: APSIM reports Yield_kgha as DRY grain (0% moisture). Market
+## yields (and bushels, defined at 13% moisture) are higher, so on load we
+## gross the simulated yields up to 13% moisture and display everything on that
+## basis — consistent with a grower's measured, market-moisture yield.
 ##
-## Data contract: app/data/yield-surface.csv, produced by
-## simulation/export-app-data.R.
+## Single-file Shiny app. Runs locally (shiny::runApp("app")), on a Shiny
+## server, or as a static WebAssembly site via shinylive (see .github). Uses
+## only shiny + bslib + ggplot2 — no sf/leaflet — so the shinylive build stays
+## light; all map projection is pre-baked by simulation/export-app-data.R.
+##
+## Data contract: app/data/yield-surface.csv (+ ar-state.csv, ar-counties.csv),
+## produced by simulation/export-app-data.R.
 ## ============================================================
 
 library(shiny)
 library(bslib)
-library(leaflet)
 library(ggplot2)
 
-## Helpers (unit conversion, nearest-cell lookup, practice lookup) + UARK plot
 source("R/helpers.R", local = TRUE)
 source("R/plots.R", local = TRUE)
 
@@ -28,21 +32,31 @@ source("R/plots.R", local = TRUE)
 SURFACE <- read.csv("data/yield-surface.csv", stringsAsFactors = FALSE)
 SURFACE$co2 <- as.integer(SURFACE$co2)
 
-## This version focuses on the current-climate simulations only.
+## This version focuses on the current-climate baseline only.
 SURFACE <- SURFACE[SURFACE$climate == "current", , drop = FALSE]
 
+## Gross APSIM dry yields up to 13% market moisture (see header note).
+GRAIN_MOISTURE <- 0.13
+ycols <- grep("^yield_.*_kgha$", names(SURFACE), value = TRUE)
+SURFACE[ycols] <- SURFACE[ycols] / (1 - GRAIN_MOISTURE)
+
+## Restrict to eastern Arkansas (the soybean region) — matches the manuscript
+## maps' coord_sf(xlim = c(360000, 570000)) crop.
+SURFACE <- SURFACE[SURFACE$x_alb >= 360000 & SURFACE$x_alb <= 570000, , drop = FALSE]
+
+## Boundaries (pre-projected to EPSG:5070 by the export script)
+STATE_DF  <- read.csv("data/ar-state.csv",   stringsAsFactors = FALSE)
+COUNTY_DF <- read.csv("data/ar-counties.csv", stringsAsFactors = FALSE)
+
 ## Unique cells for the map / nearest-cell search
-CELLS <- unique(SURFACE[, c("cellid", "x", "y")])
+CELLS <- unique(SURFACE[, c("cellid", "x", "y", "x_alb", "y_alb")])
 
 ## Practice choices, constrained to what was actually simulated
 MG_CHOICES     <- sort(unique(SURFACE$mg))
 window_choices <- function(mg) sort(unique(SURFACE$plant_window[SURFACE$mg == mg]))
 
-AR_CENTER <- list(lng = mean(range(CELLS$x)), lat = mean(range(CELLS$y)))
-
-## UARK cardinal sequential palette for the yield surface (continuous)
-YIELD_RANGE <- range(SURFACE$yield_mean_kgha, na.rm = TRUE)
-pal <- leaflet::colorNumeric(UARK$ramp, domain = YIELD_RANGE, na.color = "#e6e6e6")
+## Shared colour scale across the map (market kg/ha)
+FILL_LIMITS <- range(SURFACE$yield_mean_kgha, na.rm = TRUE)
 
 ## ── UI ───────────────────────────────────────────────────────────────────
 ui <- page_sidebar(
@@ -59,7 +73,7 @@ ui <- page_sidebar(
       column(6, numericInput("lon", "Longitude", value = -91.5,
                              min = -95, max = -89.5, step = 0.01))
     ),
-    helpText("Type coordinates or click the map to drop a pin."),
+    helpText("Enter your field's coordinates to locate it on the map."),
     hr(),
 
     h5("Your practice"),
@@ -73,24 +87,20 @@ ui <- page_sidebar(
       column(5, radioButtons("unit", "Units",
                              c("bu/ac", "kg/ha"), selected = "bu/ac"))
     ),
+    helpText("Yields shown at 13% market moisture."),
     hr(),
     helpText(textOutput("provenance", inline = TRUE))
   ),
 
-  ## ── Boxplot (above the map) ──────────────────────────────────────────
   card(
     card_header(textOutput("plots_header", inline = TRUE)),
-    plotOutput("boxplot", height = 320)
+    plotOutput("boxplot", height = 340)
   ),
-
-  ## ── Map ──────────────────────────────────────────────────────────────
   card(
     full_screen = TRUE,
-    card_header("Simulated soybean yield across Arkansas"),
-    leafletOutput("map", height = 500)
+    card_header("Simulated soybean yield across eastern Arkansas"),
+    plotOutput("map", height = 520)
   ),
-
-  ## ── Narrative ────────────────────────────────────────────────────────
   card(
     card_header("What this means for your field"),
     uiOutput("explain")
@@ -112,20 +122,20 @@ server <- function(input, output, session) {
     nearest_cell(CELLS, input$lat, input$lon)
   })
 
-  ## Simulated row for the selected practice at that cell
+  ## Simulated row for the selected practice at that cell (market kg/ha)
   pred_row <- reactive({
     c <- cell(); req(c, input$mg, input$window)
     lookup_practice(SURFACE, c$cellid, input$mg, input$window, "current", 350L)
   })
 
-  ## Farmer's yield in kg/ha
+  ## Farmer's yield in market kg/ha
   my_kgha <- reactive({
     v <- input$myyield
     if (is.null(v) || is.na(v)) return(NA_real_)
     if (identical(input$unit, "bu/ac")) buac_to_kgha(v) else v
   })
 
-  ## ── Boxplot: simulated distribution vs the farmer's yield ───────────────
+  ## ── Boxplot ─────────────────────────────────────────────────────────────
   output$plots_header <- renderText({
     c <- cell()
     if (is.null(c)) "Yield distribution" else
@@ -139,74 +149,19 @@ server <- function(input, output, session) {
                  scenario_label = practice_label(pr))
   }, res = 96)
 
-  ## ── Map ────────────────────────────────────────────────────────────────
-  ## Per-cell yield for the selected practice (falls back to baseline)
-  map_data <- reactive({
+  ## ── Map (ggplot: state + county + yield raster + farm) ──────────────────
+  map_cells <- reactive({
     d <- SURFACE[SURFACE$mg == input$mg & SURFACE$plant_window == input$window, ]
     if (nrow(d) == 0) d <- SURFACE[SURFACE$scenario == "baseline", ]
-    d
+    unique(d[, c("x_alb", "y_alb", "yield_mean_kgha")])
   })
 
-  ## Legend values in the user's unit; palette stays keyed on kg/ha internally
-  legend_vals <- reactive(seq(YIELD_RANGE[1], YIELD_RANGE[2], length.out = 5))
-
-  output$map <- renderLeaflet({
-    leaflet(options = leafletOptions(minZoom = 6, maxZoom = 12,
-                                     preferCanvas = TRUE)) |>
-      addProviderTiles(providers$CartoDB.PositronNoLabels, group = "Clean") |>
-      addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") |>
-      addLayersControl(baseGroups = c("Clean", "Satellite"),
-                       options = layersControlOptions(collapsed = TRUE)) |>
-      setView(AR_CENTER$lng, AR_CENTER$lat, zoom = 7)
-  })
-
-  ## Draw the filled yield surface for the selected practice
-  observe({
-    d <- map_data()
-    unit <- input$unit
-    fmt_v <- function(v) vapply(v, function(x) fmt_yield(x, unit), character(1))
-    labs <- sprintf("<b>%s</b><br>%s",
-                    fmt_v(d$yield_mean_kgha),
-                    ifelse(is.na(d$yield_median_kgha), "",
-                           paste0("median ", fmt_v(d$yield_median_kgha))))
-    leafletProxy("map", data = d) |>
-      clearGroup("cells") |>
-      removeControl("yield-legend") |>
-      addCircleMarkers(
-        group = "cells",
-        lng = ~x, lat = ~y, radius = 5, stroke = FALSE, fillOpacity = 0.9,
-        fillColor = ~pal(yield_mean_kgha),
-        label = lapply(labs, htmltools::HTML)) |>
-      addLegend("bottomright", layerId = "yield-legend",
-                colors = pal(legend_vals()),
-                labels = vapply(legend_vals(),
-                                function(v) fmt_yield(v, unit), character(1)),
-                title = paste0("Simulated yield<br>(", unit, ")"),
-                opacity = 0.9)
-  })
-
-  ## Prominent cardinal farm marker + click-to-set
-  farm_icon <- makeAwesomeIcon(icon = "map-marker", markerColor = "darkred",
-                               iconColor = "#ffffff", library = "fa")
-  observe({
-    c <- cell(); req(c)
-    pr <- pred_row()
-    txt <- if (is.null(pr)) "not simulated for this practice"
-           else fmt_yield(pr$yield_mean_kgha, input$unit)
-    leafletProxy("map") |>
-      clearGroup("farm") |>
-      addAwesomeMarkers(group = "farm", lng = input$lon, lat = input$lat,
-                        icon = farm_icon,
-                        popup = paste0("<b>Your field</b><br>Simulated: ", txt,
-                                       "<br>Nearest cell: ",
-                                       round(c$dist_km, 1), " km"))
-  })
-
-  observeEvent(input$map_click, {
-    click <- input$map_click
-    updateNumericInput(session, "lat", value = round(click$lat, 3))
-    updateNumericInput(session, "lon", value = round(click$lng, 3))
-  })
+  output$map <- renderPlot({
+    c <- cell()
+    farm <- if (is.null(c)) NULL else c(c$x_alb, c$y_alb)
+    make_map(map_cells(), STATE_DF, COUNTY_DF, farm = farm,
+             unit = input$unit, fill_limits = FILL_LIMITS)
+  }, res = 96)
 
   ## ── Narrative explanation ──────────────────────────────────────────────
   output$explain <- renderUI({
@@ -215,7 +170,7 @@ server <- function(input, output, session) {
     parts <- list()
     if (!is.null(pr)) {
       parts <- c(parts, sprintf(
-        "At your field (nearest simulated cell %s km away), APSIM simulates a mean yield of %s for %s (40-year average; typical range %s–%s).",
+        "At your field (nearest simulated cell %s km away), APSIM simulates a mean yield of %s for %s (40-year average at 13%% moisture; typical range %s–%s).",
         round(c$dist_km, 1),
         fmt_yield(pr$yield_mean_kgha, input$unit),
         practice_label(pr),
