@@ -99,17 +99,18 @@ predicted yield. The grower:
 The app finds the nearest simulated grid cell and shows, above a filled
 cardinal-red yield map of Arkansas:
 
-- A **boxplot** of the simulated 40-year yield distribution for every practice at
-  that cell, with the grower's reported yield drawn as a reference line — the
-  **yield gap** is the distance between the two.
-- **Year-type small multiples**: for each practice, the yield in a *bad* year
-  (10th percentile), a *typical* year (median) and a *good* year (90th
-  percentile) — the yield potential a grower can plan around.
-- A narrative summary: predicted yield, the gap, and the **adaptation upside**
-  from earlier planting / a longer maturity group under +2 °C warming.
+- A simple **boxplot** comparing the simulated 40-year yield distribution for the
+  grower's selected practice against their own reported yield — the **yield gap**
+  is the distance between the two.
+- A narrative summary: the simulated mean, its typical (10th–90th percentile)
+  range, and how the grower's reported yield compares.
 
 The interface is styled in **University of Arkansas cardinal (#9D2235)** so the
-map and figures can be embedded directly in a university web page.
+map and figure can be embedded directly in a university web page.
+
+> This first version focuses on the **current-climate baseline**. The warming
+> (+2 °C) scenarios and the year-type breakdown are still produced by the
+> simulation and can be layered back into the app when needed.
 
 ### Run locally
 

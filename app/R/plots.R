@@ -1,6 +1,6 @@
-## plots.R — UARK-branded ggplot2 figures for the soy-yield-map app.
-## Kept separate from app.R so the visuals can evolve independently and be
-## reused (e.g. exported as static figures for the university website).
+## plots.R — UARK-branded ggplot2 figure for the soy-yield-map app.
+## Kept separate from app.R so the visual can evolve independently and be
+## reused (e.g. exported as a static figure for the university website).
 
 library(ggplot2)
 
@@ -12,9 +12,7 @@ UARK <- list(
   lgray    = "#B1B3B3",
   cream    = "#F7EEF0",
   ## light → deep cardinal sequential ramp for the yield surface
-  ramp     = c("#FBEAEC", "#E3A2AA", "#C05A67", "#9D2235", "#6E121E"),
-  ## bad / typical / good "year type" colours (muted → deep cardinal)
-  yeartype = c(Bad = "#D98C95", Typical = "#9D2235", Good = "#5C1420")
+  ramp     = c("#FBEAEC", "#E3A2AA", "#C05A67", "#9D2235", "#6E121E")
 )
 
 ## Shared theme: clean, print-quality, university-website friendly.
@@ -29,97 +27,54 @@ theme_uark <- function(base_size = 13) {
       axis.title      = element_text(colour = UARK$gray),
       panel.grid.minor = element_blank(),
       panel.grid.major.x = element_blank(),
-      strip.text      = element_text(face = "bold", colour = UARK$dark,
-                                     size = rel(0.85)),
-      strip.background = element_rect(fill = UARK$cream, colour = NA),
       legend.position = "none",
       plot.margin     = margin(8, 12, 8, 8)
     )
 }
 
-## Short two-line labels for each scenario/practice, in a sensible order.
-PRACTICE_LEVELS <- c("baseline", "early_sowing", "longer_mat",
-                     "early_sowing_longer_mat", "climate_change")
-PRACTICE_LABELS <- c(
-  baseline                = "MG4 · late May\n(current)",
-  climate_change          = "MG4 · late May\n(+2 °C)",
-  early_sowing            = "MG4 · late Apr\n(+2 °C)",
-  longer_mat              = "MG5 · late May\n(+2 °C)",
-  early_sowing_longer_mat = "MG5 · late Apr\n(+2 °C)"
-)
-
-## Convert a kg/ha column to the display unit.
+## Convert a kg/ha value to the display unit.
 .to_unit <- function(v, unit) if (identical(unit, "bu/ac")) v / 67.25 else v
 .unit_lab <- function(unit) if (identical(unit, "bu/ac")) "Yield (bu/ac)" else "Yield (kg/ha)"
 
-## ── Boxplot: simulated distribution by practice vs the farmer's yield ─────
-## `rows` = yield-surface rows for ONE cell (the practices to show).
+## ── Boxplot: simulated distribution vs the farmer's reported yield ───────
+## `row` = ONE yield-surface row (the scenario the farmer selected).
 ## `observed_kgha` = the farmer's reported yield (may be NA).
-## `highlight` = scenario name of the farmer's current selection (filled cardinal).
-make_boxplot <- function(rows, observed_kgha = NA, unit = "bu/ac",
-                         highlight = NULL) {
-  rows <- rows[rows$scenario %in% PRACTICE_LEVELS, , drop = FALSE]
-  rows <- rows[!duplicated(rows$scenario), , drop = FALSE]
-  rows$scenario <- factor(rows$scenario, levels = PRACTICE_LEVELS)
-  rows <- rows[order(rows$scenario), , drop = FALSE]
-  rows$lab <- factor(PRACTICE_LABELS[as.character(rows$scenario)],
-                     levels = PRACTICE_LABELS[levels(rows$scenario)])
-  rows$is_sel <- !is.null(highlight) & rows$scenario == highlight
-
+make_boxplot <- function(row, observed_kgha = NA, unit = "bu/ac",
+                         scenario_label = "Simulated") {
   sc <- function(v) .to_unit(v, unit)
-  g <- ggplot(rows) +
-    geom_boxplot(
-      aes(x = lab,
-          ymin = sc(yield_min_kgha), lower = sc(yield_p25_kgha),
-          middle = sc(yield_median_kgha), upper = sc(yield_p75_kgha),
-          ymax = sc(yield_max_kgha), fill = is_sel),
-      stat = "identity", width = 0.6, colour = UARK$dark, linewidth = 0.4) +
-    scale_fill_manual(values = c(`TRUE` = UARK$cardinal, `FALSE` = "#E9C9CE"))
+  sim_cat <- "Simulated\n(40 years)"
 
+  boxdf <- data.frame(
+    cat    = sim_cat,
+    ymin   = sc(row$yield_min_kgha),   lower = sc(row$yield_p25_kgha),
+    middle = sc(row$yield_median_kgha), upper = sc(row$yield_p75_kgha),
+    ymax   = sc(row$yield_max_kgha)
+  )
+
+  g <- ggplot() +
+    geom_boxplot(
+      data = boxdf,
+      aes(x = cat, ymin = ymin, lower = lower, middle = middle,
+          upper = upper, ymax = ymax),
+      stat = "identity", width = 0.45,
+      fill = UARK$cardinal, colour = UARK$dark, linewidth = 0.5)
+
+  xlevels <- sim_cat
   if (!is.na(observed_kgha)) {
+    obsdf <- data.frame(cat = "Your field", y = sc(observed_kgha))
     g <- g +
-      geom_hline(yintercept = sc(observed_kgha), colour = UARK$gray,
-                 linetype = "dashed", linewidth = 0.7) +
-      annotate("text", x = 0.6, y = sc(observed_kgha),
-               label = "Your yield", vjust = -0.5, hjust = 0,
-               colour = UARK$gray, size = 3.4, fontface = "bold")
+      geom_point(data = obsdf, aes(x = cat, y = y),
+                 size = 5, colour = UARK$gray) +
+      geom_text(data = obsdf, aes(x = cat, y = y, label = round(y, 1)),
+                vjust = -1.1, fontface = "bold", colour = UARK$gray, size = 3.8)
+    xlevels <- c(sim_cat, "Your field")
   }
+
   g +
-    labs(title = "Simulated yield by practice vs. your reported yield",
-         subtitle = "Boxes span 40 simulated years (min–max, quartiles, median)",
+    scale_x_discrete(limits = xlevels) +
+    labs(title = "Simulated yield vs. your reported yield",
+         subtitle = paste0(scenario_label,
+                           "  ·  box = min–max, quartiles and median across 40 years"),
          x = NULL, y = .unit_lab(unit)) +
     theme_uark()
-}
-
-## ── Year-type small multiples: bad / typical / good years per scenario ────
-make_yeartype_plot <- function(rows, unit = "bu/ac") {
-  rows <- rows[rows$scenario %in% PRACTICE_LEVELS, , drop = FALSE]
-  rows <- rows[!duplicated(rows$scenario), , drop = FALSE]
-  sc <- function(v) .to_unit(v, unit)
-  long <- do.call(rbind, lapply(seq_len(nrow(rows)), function(i) {
-    data.frame(
-      scenario = rows$scenario[i],
-      year_type = c("Bad", "Typical", "Good"),
-      yield = c(sc(rows$yield_p10_kgha[i]),
-                sc(rows$yield_median_kgha[i]),
-                sc(rows$yield_p90_kgha[i])),
-      stringsAsFactors = FALSE)
-  }))
-  long$scenario <- factor(long$scenario, levels = PRACTICE_LEVELS)
-  long$lab <- factor(PRACTICE_LABELS[as.character(long$scenario)],
-                     levels = PRACTICE_LABELS[PRACTICE_LEVELS])
-  long$year_type <- factor(long$year_type, levels = c("Bad", "Typical", "Good"))
-
-  ggplot(long, aes(x = year_type, y = yield, fill = year_type)) +
-    geom_col(width = 0.75) +
-    geom_text(aes(label = round(yield)), vjust = -0.35, size = 2.9,
-              colour = UARK$gray) +
-    facet_wrap(~lab, nrow = 1) +
-    scale_fill_manual(values = UARK$yeartype) +
-    scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
-    labs(title = "Yield potential by year type",
-         subtitle = "Bad = 10th percentile · Typical = median · Good = 90th percentile of years",
-         x = NULL, y = .unit_lab(unit)) +
-    theme_uark() +
-    theme(axis.text.x = element_text(size = rel(0.8)))
 }
