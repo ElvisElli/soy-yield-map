@@ -1,79 +1,81 @@
 # Component 1 — simulation engine
 
-Grid-scale APSIM Next Generation soybean simulations across Arkansas cropland
-(~4,651 cultivated cells), 40-year weather record (1985–2024), for the scenarios
-the yield-map app exposes. This is the same modeling structure as the
-[`soybean-ar-climate-change`](https://github.com/ElvisElli/soybean-ar-climate-change)
-study, packaged here to feed the interactive map.
+A small, reproducible R + APSIM Next Gen pipeline that builds the yield surface
+the app consumes. It downloads its own weather and soil, runs APSIM across the
+Arkansas cropland grid (~4,651 cultivated cells, 1985–2024) for a configurable
+set of scenarios, and aggregates the results.
 
-## What it produces
+## Pipeline
 
 ```
-simulation/code/01-simulation.R   ──►  data/outputs/simulated-scenarios-df.rds   (full, ~30 MB, gitignored)
-simulation/export-app-data.R      ──►  ../app/data/yield-surface.csv             (aggregated, committed)
+config.R                ← the one file you edit (scenarios, grid, years, cores)
+01-get-weather-soil.R   → data/raw/weather/<cellid>.met   (NASA POWER)
+                          data/raw/soil/<cellid>.rds      (USDA SSURGO)
+02-run-apsim.R          → data/outputs/simulated-scenarios-df.rds
+03-export-app-data.R    → ../app/data/yield-surface.csv (+ ar-state/ar-counties)
+run-all.R               → runs 01 → 02 → 03
+R/data.R, R/apsim.R     → helper library (download, build, run)
+templates/…apsimx       → APSIM soybean template (MG4/MG5/MG6 cultivars)
 ```
 
-`yield-surface.csv` is the **only** thing the app consumes — a per-cell,
-per-practice 40-year mean yield with p10/p90 spread.
+Run the whole thing, or one step at a time:
 
-## Running
-
-```r
-# From the repo root, in RStudio or:
-Rscript simulation/code/01-simulation.R     # 1. run APSIM across grid × scenarios (parallel, resumable)
-Rscript simulation/export-app-data.R        # 2. aggregate results → app/data/yield-surface.csv
+```bash
+Rscript run-all.R                 # everything
+# or
+Rscript 01-get-weather-soil.R
+Rscript 02-run-apsim.R
+Rscript 03-export-app-data.R
 ```
 
-The simulation is **fully resumable** — re-run any time; completed chunks are
-skipped automatically (per-chunk RDS checkpoints under
-`data/outputs/checkpoints/`).
+Every step is **resumable**: cached weather/soil are reused, and APSIM results
+are checkpointed per chunk of cells (`data/outputs/checkpoints/`), so an
+interrupted run continues where it left off.
 
-| Setting            | Default   | Notes                                   |
-|--------------------|-----------|-----------------------------------------|
-| `CHUNK_SIZE`       | 50        | cells per parallel task                 |
-| `DATE_START/END`   | 1985–2024 | simulation clock                        |
-| Cores              | `nCores-2`| leaves 2 free for the OS                |
-| `LOCAL_DATA_CACHE` | see below | optional local-SSD copy of weather/soil |
+## Editing scenarios (`config.R`)
 
-**Local data cache (Windows):** Box Drive network latency is the main
-bottleneck. Copy `weather/` and `soil/` to a local SSD once (~10 GB) and set
-`LOCAL_DATA_CACHE <- "C:/temp/soybean-data"` in `code/01-simulation.R` to cut
-runtime 30–50%.
+One row per scenario — add or remove rows freely:
 
-## Environment auto-detection
+| field       | meaning                                            |
+|-------------|----------------------------------------------------|
+| `name`      | short id used in outputs and the app               |
+| `cultivar`  | `PurcellMG4` / `PurcellMG5` / `PurcellMG6`          |
+| `sow_date`  | APSIM `dd-mmm`, e.g. `22-May`, `24-Apr`, `05-Jun`   |
+| `co2`       | atmospheric CO₂ (ppm)                              |
+| `warming_C` | °C added to daily min/max temperature (0 = current)|
+| `row_spacing` | mm                                               |
 
-The script identifies the machine at startup — no manual configuration:
+`config.R` also holds the grid (`N_CELLS` to subset for a quick test), the
+simulation clock (`DATE_START` / `DATE_END`), and compute settings (`N_CORES`,
+`CHUNK_SIZE`).
 
-| Environment        | APSIM exe                              | Weather/soil                                | Tmp dir            |
-|--------------------|----------------------------------------|---------------------------------------------|--------------------|
-| Windows (any user) | Latest APSIM under `%LOCALAPPDATA%`     | Scans Box mount points across user profiles | `C:\temp\apsim-proc` |
-| Linux / cloud      | Auto-detected                          | `data/raw/weather` + `data/raw/soil`        | `/tmp/apsim-proc`  |
+## Installing APSIM
 
-## Scenarios
+The pipeline needs the APSIM `Models` executable; `R/apsim.R` finds it
+automatically.
 
-Defined in `data/raw/scenarios/soy-scenarios-10-24.xlsx`:
+- **Linux / cloud:** install the `.deb` from the climate-change study's
+  `installers/` (`sudo dpkg -i apsim-*.deb`; GUI-only deps like `zenity` can be
+  ignored — the `Models` CLI still runs).
+- **Windows:** install APSIM normally; it is picked up from
+  `%LOCALAPPDATA%\Programs\APSIM*`.
 
-| Scenario                  | Cultivar   | Sowing | CO₂ (ppm) | Climate  |
-|---------------------------|------------|--------|-----------|----------|
-| baseline                  | PurcellMG4 | 22-May | 350       | current  |
-| climate_change            | PurcellMG4 | 22-May | 350 / 540 | +2 °C    |
-| early_sowing              | PurcellMG4 | 24-Apr | 350 / 540 | +2 °C    |
-| longer_mat                | PurcellMG5 | 22-May | 350 / 540 | +2 °C    |
-| early_sowing_longer_mat   | PurcellMG5 | 24-Apr | 350 / 540 | +2 °C    |
+## Parallelism
+
+`02-run-apsim.R` uses fork-based `parallel::mclapply` (ideal on a Linux cloud
+box). On Windows it falls back to a single core — run large jobs in the cloud,
+or subset the grid with `N_CELLS`.
 
 ## Required R packages
 
-`apsimx`, `doParallel`, `foreach`, `dplyr`, `readr`, `readxl`, `parallel`,
-`data.table`. The `export-app-data.R` step needs `dplyr`, `readr` and `sf`
-(to project cells and the state/county boundaries to EPSG:5070 for the app).
+`apsimx`, `nasapower`, `soilDB`, `sf`, `dplyr`, `readr`, `parallel`.
+(`nasapower` → weather, `soilDB` → SSURGO soil, `sf` → project cells + boundaries
+in the export.)
 
-## Files
+## Data sources
 
-| File                                       | Description                                   |
-|--------------------------------------------|-----------------------------------------------|
-| `code/01-simulation.R`                     | Run APSIM across grid × scenarios (parallel)  |
-| `code/utils/variables.R`                   | Soil-fraction weighted variable aggregation   |
-| `code/utils/plot-theme.R`                  | Shared ggplot2 theme                          |
-| `export-app-data.R`                        | Aggregate sim results → app yield surface     |
-| `data/raw/sim-grid.rds`                    | Spatial grid (x, y, cellid, cultivated flag)  |
-| `data/raw/scenarios/soy-scenarios-10-24.xlsx` | Scenario definitions                       |
+| Source        | What                         | Function                       |
+|---------------|------------------------------|--------------------------------|
+| NASA POWER    | daily weather → `.met`       | `apsimx::get_power_apsim_met`  |
+| USDA SSURGO   | soil profile → `.rds`        | `apsimx::get_ssurgo_soil_profile` |
+| Census TIGER  | AR state + county boundaries | shapefiles in `data/raw/cropland` |

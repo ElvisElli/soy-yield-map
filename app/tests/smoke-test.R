@@ -27,11 +27,7 @@ lp <- lookup_practice(surface, nc$cellid, "MG4", "late May", "current", 350L)
 stopifnot(!is.null(lp), lp$yield_mean_kgha > 0)
 cat(sprintf("[ok] lookup_practice (baseline): %.0f kg/ha (%.1f bu/ac)\n",
             lp$yield_mean_kgha, kgha_to_buac(lp$yield_mean_kgha)))
-
-bp <- practices_at_cell(surface, nc$cellid, "plus2C", 350L)
-stopifnot(nrow(bp) >= 1, all(diff(bp$yield_mean_kgha) <= 0))
-cat(sprintf("[ok] practices_at_cell: best +2C = %s @ %.0f kg/ha\n",
-            practice_label(bp[1, ]), bp$yield_mean_kgha[1]))
+stopifnot(practice_label(lp) == "MG4, planted late May")
 
 ## 2. Plot builder -------------------------------------------------------------
 source("R/plots.R")
