@@ -113,12 +113,18 @@ ui <- page_sidebar(
     checkboxInput("benchmark", "Add county 5-yr NASS average", value = FALSE),
     hr(),
     ## Feedback — opens the visitor's email client (works on the static site).
-    ## Change the address below to route feedback elsewhere.
+    ## target/rel let it open reliably from the WebAssembly page; the address is
+    ## also shown as plain, copyable text for devices with no mail handler.
+    ## Change FEEDBACK_EMAIL above to route feedback elsewhere.
     tags$a(
       href = paste0("mailto:", FEEDBACK_EMAIL,
                     "?subject=Soybean%20Yield-Gap%20Map%20feedback"),
+      target = "_blank", rel = "noopener",
       class = "btn btn-outline-secondary btn-sm w-100",
       "✉ Send feedback"),
+    tags$div(class = "text-muted small mt-1 text-center",
+             "or email ",
+             tags$a(href = paste0("mailto:", FEEDBACK_EMAIL), FEEDBACK_EMAIL)),
     helpText(textOutput("provenance", inline = TRUE))
   ),
 
