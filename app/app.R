@@ -67,7 +67,10 @@ poly_na <- function(df) {
 }
 STATE_LINE  <- poly_na(STATE_DF)
 COUNTY_LINE <- poly_na(COUNTY_DF)
-STATE_BB    <- list(lng = range(STATE_DF$x), lat = range(STATE_DF$y))
+## Pad the state bounding box so neighbouring states show in the background.
+.pad <- 1.1
+STATE_BB <- list(lng = range(STATE_DF$x) + c(-.pad, .pad),
+                 lat = range(STATE_DF$y) + c(-.pad, .pad))
 
 ## ── UI ───────────────────────────────────────────────────────────────────
 ui <- page_sidebar(
