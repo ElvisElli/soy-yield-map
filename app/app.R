@@ -28,6 +28,7 @@ library(leaflet)
 
 source("R/helpers.R", local = TRUE)
 source("R/plots.R", local = TRUE)
+source("R/apsim-generate.R", local = TRUE)  # "Get APSIM template" tab (IS_WASM, generator)
 
 ## ── Load the yield surface (base read.csv keeps webR/shinylive happy) ─────
 SURFACE <- read.csv("data/yield-surface.csv", stringsAsFactors = FALSE)
@@ -60,6 +61,12 @@ window_choices <- function(mg) sort(unique(SURFACE$plant_window[SURFACE$mg == mg
 ## Where the "Send feedback" button routes (edit to change the recipient).
 FEEDBACK_EMAIL <- "eelli@uark.edu"
 
+## ── "Get APSIM template" tab: choices + contiguous-US map bounds ──────────
+CULTIVAR_CHOICES <- c("MG4 (PurcellMG4)" = "PurcellMG4",
+                      "MG5 (PurcellMG5)" = "PurcellMG5",
+                      "MG6 (PurcellMG6)" = "PurcellMG6")
+US_BB <- list(lng = c(-125, -66.5), lat = c(24, 49.5))   # lower-48 view
+
 ## Shared colour scale for the map (market kg/ha)
 YIELD_RANGE <- range(SURFACE$yield_mean_kgha, na.rm = TRUE)
 pal <- leaflet::colorNumeric(UARK$ramp, domain = YIELD_RANGE, na.color = "#e6e6e6")
@@ -81,63 +88,119 @@ STATE_BB <- list(lng = range(STATE_DF$x) + c(-.pad, .pad),
                  lat = range(STATE_DF$y) + c(-.pad, .pad))
 
 ## ── UI ───────────────────────────────────────────────────────────────────
-ui <- page_sidebar(
-  title = "Arkansas Soybean Yield-Gap Map",
+## Tab 1 — the yield-gap map (unchanged content, now inside a sidebar layout).
+tab_yieldgap <- nav_panel(
+  title = "Yield-gap map",
+  layout_sidebar(
+    sidebar = sidebar(
+      width = 340,
+      h5("Your field"),
+      fluidRow(
+        column(6, numericInput("lat", "Latitude", value = 34.75,
+                               min = 33, max = 36.6, step = 0.01)),
+        column(6, numericInput("lon", "Longitude", value = -91.5,
+                               min = -95, max = -89.5, step = 0.01))
+      ),
+      helpText("Type coordinates or click the map to drop a pin."),
+      hr(),
+
+      h5("Your practice"),
+      selectInput("mg", "Maturity group", choices = MG_CHOICES),
+      selectInput("window", "Planting window", choices = NULL),
+      hr(),
+
+      h5("Your yield"),
+      fluidRow(
+        column(7, numericInput("myyield", "Measured yield", value = 50, min = 0)),
+        column(5, radioButtons("unit", "Units",
+                               c("bu/ac", "kg/ha"), selected = "bu/ac"))
+      ),
+      helpText("Yields shown at 13% market moisture."),
+      checkboxInput("benchmark", "Add county 5-yr NASS average", value = FALSE),
+      hr(),
+      ## Feedback — opens the visitor's email client (works on the static site).
+      ## target/rel let it open reliably from the WebAssembly page; the address
+      ## is also shown as plain, copyable text for devices with no mail handler.
+      ## Change FEEDBACK_EMAIL above to route feedback elsewhere.
+      tags$a(
+        href = paste0("mailto:", FEEDBACK_EMAIL,
+                      "?subject=Soybean%20Yield-Gap%20Map%20feedback"),
+        target = "_blank", rel = "noopener",
+        class = "btn btn-outline-secondary btn-sm w-100",
+        "✉ Send feedback"),
+      tags$div(class = "text-muted small mt-1 text-center",
+               "or email ",
+               tags$a(href = paste0("mailto:", FEEDBACK_EMAIL), FEEDBACK_EMAIL)),
+      helpText(textOutput("provenance", inline = TRUE))
+    ),
+    card(
+      fill = FALSE,
+      uiOutput("tiles"),
+      plotOutput("barplot", height = "260px"),
+      uiOutput("bench_note")
+    ),
+    card(
+      full_screen = TRUE,
+      leafletOutput("map", height = 520)
+    )
+  )
+)
+
+## Tab 2 — generate a ready-to-run APSIM file for any point in the U.S.
+tab_apsim <- nav_panel(
+  title = "Get APSIM template",
+  layout_sidebar(
+    sidebar = sidebar(
+      width = 340,
+      h5("Field location"),
+      fluidRow(
+        column(6, numericInput("g_lat", "Latitude", value = 34.75,
+                               min = 24, max = 49.5, step = 0.001)),
+        column(6, numericInput("g_lon", "Longitude", value = -91.5,
+                               min = -125, max = -66.5, step = 0.001))
+      ),
+      helpText("Click the map to drop a pin anywhere in the contiguous U.S."),
+      hr(),
+
+      h5("Crop setup"),
+      selectInput("g_cultivar", "Maturity group", choices = CULTIVAR_CHOICES),
+      dateInput("g_sow", "Sowing date",
+                value = as.Date(paste0(format(Sys.Date(), "%Y"), "-05-22")),
+                format = "M d", startview = "month"),
+      helpText("Only the month/day are used (the year is ignored)."),
+      numericInput("g_start", "Weather start year", value = 1985,
+                   min = 1984, max = as.integer(format(Sys.Date(), "%Y")),
+                   step = 1),
+      hr(),
+
+      ## Download control depends on where the app is running.
+      if (IS_WASM) uiOutput("g_wasm_notice")
+      else tagList(
+        downloadButton("dl_apsimx", "Generate & download APSIM (.zip)",
+                       class = "btn-primary w-100"),
+        helpText("Downloads SSURGO soil + NASA POWER weather and builds the",
+                 "file — this can take up to a minute.")
+      ),
+      textOutput("g_status")
+    ),
+    card(
+      full_screen = TRUE,
+      card_header("Pick a location"),
+      leafletOutput("g_map", height = 460)
+    ),
+    card(
+      card_header("What you get"),
+      uiOutput("g_explain")
+    )
+  )
+)
+
+ui <- page_navbar(
+  title = "Soybean Field Toolkit",
   theme = bs_theme(version = 5, bootswatch = "flatly",
                    primary = "#9D2235", secondary = "#54585A"),
-
-  sidebar = sidebar(
-    width = 340,
-    h5("Your field"),
-    fluidRow(
-      column(6, numericInput("lat", "Latitude", value = 34.75,
-                             min = 33, max = 36.6, step = 0.01)),
-      column(6, numericInput("lon", "Longitude", value = -91.5,
-                             min = -95, max = -89.5, step = 0.01))
-    ),
-    helpText("Type coordinates or click the map to drop a pin."),
-    hr(),
-
-    h5("Your practice"),
-    selectInput("mg", "Maturity group", choices = MG_CHOICES),
-    selectInput("window", "Planting window", choices = NULL),
-    hr(),
-
-    h5("Your yield"),
-    fluidRow(
-      column(7, numericInput("myyield", "Measured yield", value = 50, min = 0)),
-      column(5, radioButtons("unit", "Units",
-                             c("bu/ac", "kg/ha"), selected = "bu/ac"))
-    ),
-    helpText("Yields shown at 13% market moisture."),
-    checkboxInput("benchmark", "Add county 5-yr NASS average", value = FALSE),
-    hr(),
-    ## Feedback — opens the visitor's email client (works on the static site).
-    ## target/rel let it open reliably from the WebAssembly page; the address is
-    ## also shown as plain, copyable text for devices with no mail handler.
-    ## Change FEEDBACK_EMAIL above to route feedback elsewhere.
-    tags$a(
-      href = paste0("mailto:", FEEDBACK_EMAIL,
-                    "?subject=Soybean%20Yield-Gap%20Map%20feedback"),
-      target = "_blank", rel = "noopener",
-      class = "btn btn-outline-secondary btn-sm w-100",
-      "✉ Send feedback"),
-    tags$div(class = "text-muted small mt-1 text-center",
-             "or email ",
-             tags$a(href = paste0("mailto:", FEEDBACK_EMAIL), FEEDBACK_EMAIL)),
-    helpText(textOutput("provenance", inline = TRUE))
-  ),
-
-  card(
-    fill = FALSE,
-    uiOutput("tiles"),
-    plotOutput("barplot", height = "260px"),
-    uiOutput("bench_note")
-  ),
-  card(
-    full_screen = TRUE,
-    leafletOutput("map", height = 520)
-  )
+  tab_yieldgap,
+  tab_apsim
 )
 
 ## ── Server ─────────────────────────────────────────────────────────────────
@@ -299,6 +362,94 @@ server <- function(input, output, session) {
     paste0("Data: APSIM NG grid simulation, ", nrow(CELLS),
            " cells. Generated ", gen, ".")
   })
+
+  ## ── Tab 2: Get APSIM template ────────────────────────────────────────────
+  ## US map to pick the point (click sets the coordinate inputs).
+  output$g_map <- renderLeaflet({
+    leaflet(options = leafletOptions(minZoom = 3, maxZoom = 12)) |>
+      addProviderTiles(providers$CartoDB.Positron, group = "Map") |>
+      addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") |>
+      addLayersControl(baseGroups = c("Map", "Satellite"),
+                       options = layersControlOptions(collapsed = TRUE)) |>
+      fitBounds(US_BB$lng[1], US_BB$lat[1], US_BB$lng[2], US_BB$lat[2])
+  })
+
+  g_icon <- makeAwesomeIcon(icon = "leaf", markerColor = "green",
+                            iconColor = "#ffffff", library = "fa")
+  observe({
+    lat <- input$g_lat; lon <- input$g_lon
+    req(is.finite(lat), is.finite(lon))
+    leafletProxy("g_map") |>
+      clearGroup("pin") |>
+      addAwesomeMarkers(group = "pin", lng = lon, lat = lat, icon = g_icon,
+                        popup = sprintf("Selected: %.4f, %.4f", lat, lon))
+  })
+  observeEvent(input$g_map_click, {
+    updateNumericInput(session, "g_lat", value = round(input$g_map_click$lat, 4))
+    updateNumericInput(session, "g_lon", value = round(input$g_map_click$lng, 4))
+  })
+
+  ## Plain-language description of the deliverable.
+  output$g_explain <- renderUI({
+    cult <- names(CULTIVAR_CHOICES)[match(input$g_cultivar, CULTIVAR_CHOICES)]
+    sow  <- tryCatch(to_apsim_date(input$g_sow), error = function(e) "22-May")
+    tagList(
+      tags$p("A ", tags$b(".zip"), " containing a ready-to-run APSIM Next Gen",
+             " simulation for the selected point:"),
+      tags$ul(
+        tags$li(tags$b("soybean.apsimx"), " — the study's template with the",
+                " USDA-SSURGO soil profile embedded, cultivar ",
+                tags$b(cult), ", sowing ", tags$b(sow),
+                ", and the clock running from ", tags$b(input$g_start),
+                " to about today."),
+        tags$li(tags$b("weather.met"), " — NASA POWER daily weather for the",
+                " point (referenced by the .apsimx).")
+      ),
+      tags$p(class = "text-muted small",
+             "Unzip, then open soybean.apsimx in APSIM NG, or run headless:",
+             tags$code("Models soybean.apsimx"), ". NASA POWER has a few days'",
+             " latency, so weather runs to roughly the current date.")
+    )
+  })
+
+  if (IS_WASM) {
+    ## Static site: no server R / no API access — hand over the portable script.
+    output$g_wasm_notice <- renderUI({
+      tagList(
+        div(class = "alert alert-warning small mb-2",
+            tags$b("Runs on your computer."), " Building the file downloads",
+            " USDA soil and NASA weather, which the in-browser version can't do.",
+            " Download the script below and run it in R:", tags$br(),
+            tags$code("Rscript make-apsim.R --lat  --lon "),
+            " (needs ", tags$code("install.packages(\"apsimx\")"), ")."),
+        downloadButton("dl_script", "Download generator script (make-apsim.R)",
+                       class = "btn-primary w-100")
+      )
+    })
+    output$dl_script <- downloadHandler(
+      filename = function() "make-apsim.R",
+      content  = function(file) file.copy("scripts/make-apsim.R", file, overwrite = TRUE)
+    )
+  } else {
+    ## Server / local: build and download the .zip directly.
+    output$dl_apsimx <- downloadHandler(
+      filename = function()
+        sprintf("apsim-soybean_%.4f_%.4f.zip",
+                as.numeric(input$g_lat), as.numeric(input$g_lon)),
+      content = function(file) {
+        withProgress(message = "Building APSIM file", value = 0, {
+          generate_apsimx_zip(
+            lat = as.numeric(input$g_lat), lon = as.numeric(input$g_lon),
+            zip_file = file, name = "soybean",
+            cultivar = input$g_cultivar, sow_date = to_apsim_date(input$g_sow),
+            start_year = as.integer(input$g_start),
+            progress = function(p, m) setProgress(value = p, detail = m))
+        })
+      }
+    )
+  }
+
+  output$g_status <- renderText("")
 }
 
 shinyApp(ui, server)

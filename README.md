@@ -99,7 +99,11 @@ atmosphere. That's the whole knob set.
 
 ## Component 2 — the interactive tool (R Shiny + ggplot2)
 
-A single-file Shiny app (`app/app.R`). The grower:
+A Shiny app (`app/app.R`) with **two tabs**:
+
+### Tab 1 — Yield-gap map
+
+The grower:
 
 1. Types their field's **latitude / longitude**.
 2. Selects **maturity group** and **planting date** (their practice).
@@ -123,6 +127,29 @@ The app finds the nearest simulated grid cell and shows:
 The interface is styled in **University of Arkansas cardinal (#9D2235)** so the
 map and figure can be embedded directly in a university web page.
 
+### Tab 2 — Get APSIM template
+
+Pick any point in the contiguous U.S. (click the map or type a lat/lon), choose
+a **maturity group** (PurcellMG4 / MG5 / MG6), a **sowing date** and a **weather
+start year**, and download a **ready-to-run APSIM Next Gen simulation** for that
+location — a `.zip` containing:
+
+- `soybean.apsimx` — the study's soybean template with the **USDA-SSURGO** soil
+  profile embedded, your cultivar / sow date, and the clock running to ~today, and
+- `weather.met` — **NASA POWER** daily weather for the point (referenced
+  relatively, so the bundle is portable).
+
+Unzip and open it in APSIM NG, or run `Models soybean.apsimx`. The generation
+logic is `app/R/apsim-generate.R` (reused by the pipeline's `simulation/R`),
+built so nothing else is required — soil and weather are downloaded on demand.
+
+> **Where it runs:** live generation happens on a Shiny **server** or your own
+> machine (`shiny::runApp("app")`), where the `apsimx` package and the SSURGO /
+> POWER APIs are reachable. On the static **WebAssembly** site (GitHub Pages)
+> there is no server-side R and the browser can't reach those APIs, so the tab
+> instead hands you a self-contained script, [`app/scripts/make-apsim.R`](app/scripts/make-apsim.R),
+> to run locally: `Rscript make-apsim.R --lat 34.75 --lon -91.5`.
+
 **Grain moisture:** APSIM reports `Yield_kgha` as *dry* grain (0% moisture).
 Bushels are a market unit defined at **13% moisture**, so the app grosses the
 simulated yields up to 13% before display — putting them on the same basis as a
@@ -135,7 +162,8 @@ grower's measured, market-moisture yield (1 bu/ac = 67.25 kg/ha at 13%).
 ### Run locally
 
 ```r
-# install.packages(c("shiny", "bslib", "ggplot2"))
+# install.packages(c("shiny", "bslib", "ggplot2", "leaflet"))
+# for the "Get APSIM template" tab also: install.packages(c("apsimx", "zip"))
 shiny::runApp("app")
 ```
 

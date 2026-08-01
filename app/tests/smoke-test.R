@@ -45,6 +45,32 @@ stopifnot(nrow(nass) > 10, "county" %in% names(nass), "yield_bu" %in% names(nass
 stopifnot("county" %in% names(surface), any(!is.na(surface$county)))
 cat(sprintf("[ok] NASS: %d counties; surface tagged with county\n", nrow(nass)))
 
+## 2b. APSIM generator wiring (offline — no downloads) -------------------------
+source("R/apsim-generate.R")
+stopifnot(is.logical(IS_WASM), length(IS_WASM) == 1)
+stopifnot(is.function(generate_apsimx_zip), is.function(generate_apsimx_bundle))
+stopifnot(to_apsim_date(as.Date("2024-05-22")) == "22-May",
+          to_apsim_date(as.Date("2020-04-03")) == "3-Apr")
+tp <- template_path()
+stopifnot(file.exists(tp), grepl("\\.apsimx$", tp))
+## the generator must NOT hard-declare apsimx/zip in CODE (would break the webR
+## build). Strip comments first so the design notes that mention them don't trip.
+gcode <- sub("#.*$", "", readLines("R/apsim-generate.R"))
+gcode <- paste(gcode, collapse = "\n")
+stopifnot(!grepl('library\\(apsimx\\)', gcode),
+          !grepl('requireNamespace\\(["\']apsimx', gcode),
+          !grepl('apsimx::', gcode))
+cat(sprintf("[ok] APSIM generator: wired; template %s; IS_WASM=%s\n",
+            basename(tp), IS_WASM))
+
+## Optional live generation + APSIM run (set RUN_APSIM_GEN=1; needs apsimx+net)
+if (nzchar(Sys.getenv("RUN_APSIM_GEN")) && requireNamespace("apsimx", quietly = TRUE)) {
+  z <- tempfile(fileext = ".zip")
+  generate_apsimx_zip(lat = 34.75, lon = -91.5, zip_file = z, start_year = 2022)
+  stopifnot(file.exists(z), file.size(z) > 1000)
+  cat("[ok] APSIM generator: live .zip built\n")
+}
+
 ## 3. Full reactive server test ------------------------------------------------
 app <- source("app.R", local = new.env())$value
 testServer(app, {
