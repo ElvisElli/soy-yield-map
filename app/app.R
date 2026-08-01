@@ -108,14 +108,13 @@ ui <- page_sidebar(
 
   card(
     fill = FALSE,
-    card_header("Potential vs. actual yield"),
     layout_column_wrap(
       width = 1/3, fixed_width = FALSE, heights_equal = "row", gap = "0.5rem",
-      value_box("Potential yield", textOutput("vb_pot"), max_height = "130px",
+      value_box("Potential yield", textOutput("vb_pot"), max_height = "100px",
                 theme = value_box_theme(bg = "#9D2235", fg = "white")),
-      value_box("Actual yield", textOutput("vb_act"), max_height = "130px",
+      value_box("Actual yield", textOutput("vb_act"), max_height = "100px",
                 theme = value_box_theme(bg = "#3F5B74", fg = "white")),
-      value_box("Yield gap", textOutput("vb_gap"), max_height = "130px",
+      value_box("Yield gap", textOutput("vb_gap"), max_height = "100px",
                 theme = value_box_theme(bg = "#B0842F", fg = "white"))
     ),
     plotOutput("barplot", height = "260px")
@@ -124,10 +123,6 @@ ui <- page_sidebar(
     full_screen = TRUE,
     card_header("Potential yield across Arkansas"),
     leafletOutput("map", height = 520)
-  ),
-  card(
-    card_header("What this means for your field"),
-    uiOutput("explain")
   )
 )
 
@@ -235,32 +230,6 @@ server <- function(input, output, session) {
   observeEvent(input$map_click, {
     updateNumericInput(session, "lat", value = round(input$map_click$lat, 3))
     updateNumericInput(session, "lon", value = round(input$map_click$lng, 3))
-  })
-
-  ## ── Narrative explanation ──────────────────────────────────────────────
-  output$explain <- renderUI({
-    c <- cell(); pr <- pred_row(); v <- my_kgha()
-    if (is.null(c)) return(helpText("Enter your field coordinates to begin."))
-    parts <- list()
-    if (!is.null(pr)) {
-      parts <- c(parts, sprintf(
-        "At your field (nearest simulated cell %s km away), the potential yield for %s is %s (40-year average at 13%% moisture; typical range %s–%s).",
-        round(c$dist_km, 1),
-        practice_label(pr),
-        fmt_yield(pr$yield_mean_kgha, input$unit),
-        fmt_yield(pr$yield_p10_kgha, input$unit),
-        fmt_yield(pr$yield_p90_kgha, input$unit)))
-    }
-    if (!is.null(pr) && !is.na(v)) {
-      gap <- pr$yield_mean_kgha - v
-      parts <- c(parts, if (gap > 0)
-        sprintf("Your actual yield of %s is %s below the potential — a gap to close through management.",
-                fmt_yield(v, input$unit), fmt_yield(gap, input$unit))
-        else
-        sprintf("Your actual yield of %s meets or exceeds the potential — you are farming at or above the modelled potential here.",
-                fmt_yield(v, input$unit)))
-    }
-    tagList(lapply(parts, function(p) tags$p(p)))
   })
 
   output$provenance <- renderText({
