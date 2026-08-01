@@ -1,5 +1,7 @@
 ## helpers.R — pure functions for the soy-yield-map Shiny app.
 ## Kept free of Shiny/reactives so they can be unit-tested and reused.
+## All yields here are kg/ha at 13% market moisture (the app grosses APSIM's
+## dry-matter yields up on load), so the bushel factor applies directly.
 
 ## Soybean unit conversion: 1 bushel = 60 lb at 13% moisture.
 ## 1 bu/ac = 67.25 kg/ha (standard soybean conversion factor).
@@ -51,20 +53,8 @@ lookup_practice <- function(surface, cellid, mg, plant_window, climate, co2) {
   hit[1, , drop = FALSE]
 }
 
-## All simulated practices available at one cell for a given climate + co2,
-## ordered best-yield first. Used for the "best practice here" recommendation.
-practices_at_cell <- function(surface, cellid, climate, co2) {
-  rows <- surface[surface$cellid == cellid &
-                    surface$climate == climate &
-                    surface$co2 == co2, , drop = FALSE]
-  rows[order(-rows$yield_mean_kgha), , drop = FALSE]
-}
-
 ## Human label for a practice row.
 practice_label <- function(row) {
   if (is.null(row) || nrow(row) == 0) return("—")
   sprintf("%s, planted %s", row$mg, row$plant_window)
 }
-
-## Colour bins for the map legend (kg/ha). Chosen to span AR soybean yields.
-yield_bins_kgha <- c(0, 2500, 3000, 3500, 4000, 4500, 5000, Inf)

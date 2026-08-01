@@ -19,15 +19,20 @@ independently:
 ```
 soy-yield-map/
 ├── simulation/     COMPONENT 1 — the modeling engine (R + APSIM NG)
-│   ├── code/                 download weather & soil, run APSIM in parallel
-│   ├── data/                 grid + scenario definitions
-│   └── export-app-data.R     aggregate sim results → compact yield surface
+│   ├── config.R              ← edit here: scenarios, grid, years
+│   ├── 01-get-weather-soil.R download NASA POWER weather + SSURGO soil
+│   ├── 02-run-apsim.R        run APSIM across cells × scenarios (parallel)
+│   ├── 03-export-app-data.R  aggregate results → compact yield surface
+│   ├── run-all.R             run 01 → 02 → 03 in order
+│   ├── R/                    helper library (data.R, apsim.R)
+│   └── templates/            APSIM soybean template (.apsimx)
 │
-├── app/            COMPONENT 2 — the interactive map (R Shiny)
+├── app/            COMPONENT 2 — the interactive tool (R Shiny + ggplot2)
 │   ├── app.R                 the Shiny application
-│   ├── R/                    helper functions (units, lookup, scenarios)
+│   ├── R/                    helpers (units/moisture) + UARK plots
 │   └── data/
-│       └── yield-surface.csv baked per-cell predictions the app reads
+│       ├── yield-surface.csv baked per-cell predictions the app reads
+│       └── ar-*.csv          pre-projected state + county boundaries
 │
 └── .github/workflows/
     └── deploy.yml            build the app to WebAssembly, publish to Pages
@@ -36,86 +41,98 @@ soy-yield-map/
 ## How the two components connect
 
 ```
-  weather + soil            APSIM NG grid run           per-cell, per-practice
-  (Box / IEM / SSURGO) ───▶ (simulation/code)  ───▶     yield surface (CSV)
-                                                              │
-                                                              ▼
-                                            Shiny app  ◀───  app/data/yield-surface.csv
-                                       (map, lat/lon lookup, gap)
+  weather  (NASA POWER)  ┐     APSIM NG run          per-cell, per-scenario
+  soil     (USDA SSURGO) ┼──▶  (simulation/02) ──▶   yield surface (CSV)
+  scenarios (config.R)   ┘                                  │
+                                                            ▼
+                                          Shiny app  ◀──  app/data/yield-surface.csv
+                                     (boxplot + gap, state/county yield map)
 ```
 
 Component 1 is expensive and run occasionally (it re-runs the whole state).
 Component 2 is cheap, static, and updated every time the surface is refreshed.
-The **only contract between them** is `app/data/yield-surface.csv` — regenerate
-it with `simulation/export-app-data.R` and the app picks it up.
+The **only contract between them** is `app/data/yield-surface.csv` (plus the
+boundary CSVs) — regenerate with `simulation/03-export-app-data.R` and the app
+picks it up.
 
 ---
 
 ## Component 1 — simulation engine
 
-Reuses the structure of the climate-change study: environment auto-detection,
-`.met` weather + `.rds` soil profiles, and parallel APSIM runs across the
-Arkansas cropland grid (~4,651 cultivated cells), 1985–2024.
+A small, self-contained pipeline that reproduces the yield surface from scratch:
+it **downloads** its own weather and soil, runs APSIM Next Gen across the
+Arkansas cropland grid (~4,651 cultivated cells, 1985–2024), and aggregates the
+results. No pre-staged data files required.
 
 ```r
-# From simulation/ in RStudio, or:
-Rscript simulation/code/01-simulation.R      # run APSIM across grid × scenarios
-Rscript simulation/export-app-data.R         # aggregate results -> app/data/yield-surface.csv
+# From simulation/ — run the whole thing:
+Rscript run-all.R
+# …or step by step:
+Rscript 01-get-weather-soil.R   # NASA POWER weather + USDA SSURGO soil (cached)
+Rscript 02-run-apsim.R          # APSIM across cells × scenarios (parallel)
+Rscript 03-export-app-data.R    # aggregate → app/data/yield-surface.csv
 ```
 
-See [`simulation/README.md`](simulation/README.md) for machine setup, the local
-data cache, and crash recovery. The engine is fully resumable — completed
-chunks are skipped on re-run.
+Every step is **resumable** (weather/soil are cached per cell; APSIM results are
+checkpointed per chunk). APSIM itself installs from the `.deb` shipped in the
+climate-change study's `installers/` — so the whole pipeline runs on a plain
+Linux cloud box. See [`simulation/README.md`](simulation/README.md) for setup.
 
-### Scenarios exposed to farmers
+### Scenarios — add or remove your own
 
-The app lets a grower pick their **maturity group** and **planting date**; each
-combination maps to one simulated scenario:
+Scenarios live in a single editable table in **`simulation/config.R`**. Each row
+is one scenario; the pipeline and the app adapt to whatever rows you define:
 
-| Maturity group | Planting date | Climate  | Scenario                  |
-|----------------|---------------|----------|---------------------------|
-| MG4            | late May      | current  | `baseline`                |
-| MG4            | late May      | +2 °C    | `climate_change`          |
-| MG4            | late April    | +2 °C    | `early_sowing`            |
-| MG5            | late May      | +2 °C    | `longer_mat`              |
-| MG5            | late April    | +2 °C    | `early_sowing_longer_mat` |
+| name                      | cultivar   | sow_date | co2 | warming_C |
+|---------------------------|------------|----------|-----|-----------|
+| baseline                  | PurcellMG4 | 22-May   | 350 | 0         |
+| early_sowing              | PurcellMG4 | 24-Apr   | 350 | 0         |
+| longer_mat                | PurcellMG5 | 22-May   | 350 | 0         |
+| early_sowing_longer_mat   | PurcellMG5 | 24-Apr   | 350 | 0         |
 
-Each scenario also has a rising-CO₂ variant (540 ppm) selectable as an advanced
-option. The two adaptation levers — **earlier planting (May→April)** and a
-**longer maturity group (MG4→MG5)** — are exactly the synergistic shifts studied
-in the paper; here a farmer can see the effect at their own field.
+To explore another sowing date or maturity group, add a row (e.g.
+`PurcellMG6`, `05-Jun`) — the template ships MG4/MG5/MG6 cultivars. `warming_C`
+adds °C to daily min/max temperature (0 = current climate); `co2` sets the
+atmosphere. That's the whole knob set.
 
 ---
 
-## Component 2 — the interactive map (R Shiny)
+## Component 2 — the interactive tool (R Shiny + ggplot2)
 
-A single-file Shiny app (`app/app.R`) with a Leaflet map of Arkansas coloured by
-predicted yield. The grower:
+A single-file Shiny app (`app/app.R`). The grower:
 
-1. Drops a pin (clicks the map) or types **latitude / longitude**.
-2. Selects **maturity group** and **planting date** (their current practice).
+1. Types their field's **latitude / longitude**.
+2. Selects **maturity group** and **planting date** (their practice).
 3. Enters **their own yield** (bu/ac or kg/ha).
 
-The app finds the nearest simulated grid cell and shows, above a filled
-cardinal-red yield map of Arkansas:
+The app finds the nearest simulated grid cell and shows:
 
-- A simple **boxplot** comparing the simulated 40-year yield distribution for the
-  grower's selected practice against their own reported yield — the **yield gap**
-  is the distance between the two.
-- A narrative summary: the simulated mean, its typical (10th–90th percentile)
-  range, and how the grower's reported yield compares.
+- Three responsive **value tiles** — **potential yield** (40-year simulated
+  mean), **actual yield** (the grower's reported yield) and the **yield gap**,
+  in bu/ac — above a simple **bar chart** comparing potential vs. actual on a
+  fixed 0–120 bu/ac axis. The tiles reflow to a single column on phones.
+- An **interactive Leaflet map** (pan/zoom, map/satellite basemap) showing the
+  **whole state of Arkansas with county outlines**, and the cardinal-red yield
+  surface across the **eastern** soybean region (western cells dropped); click
+  the map to drop a pin and locate a field.
+- A narrative summary of the simulated mean, its typical range, and the gap.
 
 The interface is styled in **University of Arkansas cardinal (#9D2235)** so the
 map and figure can be embedded directly in a university web page.
 
+**Grain moisture:** APSIM reports `Yield_kgha` as *dry* grain (0% moisture).
+Bushels are a market unit defined at **13% moisture**, so the app grosses the
+simulated yields up to 13% before display — putting them on the same basis as a
+grower's measured, market-moisture yield (1 bu/ac = 67.25 kg/ha at 13%).
+
 > This first version focuses on the **current-climate baseline**. The warming
-> (+2 °C) scenarios and the year-type breakdown are still produced by the
-> simulation and can be layered back into the app when needed.
+> (+2 °C) scenarios are still produced by the simulation and can be layered back
+> into the app when needed.
 
 ### Run locally
 
 ```r
-# install.packages(c("shiny","leaflet","bslib","dplyr","readr"))
+# install.packages(c("shiny", "bslib", "ggplot2"))
 shiny::runApp("app")
 ```
 
@@ -135,11 +152,12 @@ Server or shinyapps.io if you ever want server-side execution.
 
 The map and app are meant to keep improving. Natural next steps:
 
+- Re-enable the **+2 °C warming** scenarios in the app (already produced by the
+  pipeline) for a "now vs. future best-practice" view.
+- More levers in `config.R`: row spacing, irrigation, additional maturity groups.
 - On-demand single-point APSIM run for a farmer's exact coordinates (server mode).
-- More levers: row spacing, irrigation, additional maturity groups (MG6).
 - Historical NASS county yields overlaid for validation.
-- County/field polygons instead of grid points.
 
 Because the app only depends on `yield-surface.csv`, any of these can be added by
-extending the export script without touching the map — or by extending the map
-without re-running the simulation.
+extending the export without touching the app — or by extending the app without
+re-running the simulation.
