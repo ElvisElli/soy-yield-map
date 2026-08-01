@@ -107,12 +107,22 @@ ui <- page_sidebar(
   ),
 
   card(
-    card_header(textOutput("plots_header", inline = TRUE)),
-    plotOutput("boxplot", height = 340)
+    fill = FALSE,
+    card_header("Potential vs. actual yield"),
+    layout_column_wrap(
+      width = 1/3, fixed_width = FALSE, heights_equal = "row", gap = "0.5rem",
+      value_box("Potential yield", textOutput("vb_pot"), max_height = "130px",
+                theme = value_box_theme(bg = "#9D2235", fg = "white")),
+      value_box("Actual yield", textOutput("vb_act"), max_height = "130px",
+                theme = value_box_theme(bg = "#3F5B74", fg = "white")),
+      value_box("Yield gap", textOutput("vb_gap"), max_height = "130px",
+                theme = value_box_theme(bg = "#B0842F", fg = "white"))
+    ),
+    plotOutput("barplot", height = "260px")
   ),
   card(
     full_screen = TRUE,
-    card_header("Simulated soybean yield across eastern Arkansas"),
+    card_header("Potential yield across Arkansas"),
     leafletOutput("map", height = 520)
   ),
   card(
@@ -149,18 +159,17 @@ server <- function(input, output, session) {
     if (identical(input$unit, "bu/ac")) buac_to_kgha(v) else v
   })
 
-  ## ── Boxplot ─────────────────────────────────────────────────────────────
-  output$plots_header <- renderText({
-    c <- cell()
-    if (is.null(c)) "Yield distribution" else
-      sprintf("Yield distribution at your field (nearest cell %.1f km away)",
-              c$dist_km)
+  ## ── Value tiles (always bu/ac) + bar plot ───────────────────────────────
+  output$vb_pot <- renderText({ pr <- pred_row(); req(pr); fmt_buac(pr$yield_mean_kgha) })
+  output$vb_act <- renderText(fmt_buac(my_kgha()))
+  output$vb_gap <- renderText({
+    pr <- pred_row(); v <- my_kgha()
+    if (is.null(pr) || is.na(v)) "—" else fmt_buac(pr$yield_mean_kgha - v)
   })
 
-  output$boxplot <- renderPlot({
+  output$barplot <- renderPlot({
     pr <- pred_row(); req(pr)
-    make_barplot(pr, observed_kgha = my_kgha(), unit = input$unit,
-                 scenario_label = practice_label(pr))
+    make_barplot(pr, observed_kgha = my_kgha(), unit = input$unit)
   }, res = 96)
 
   ## ── Interactive map (Leaflet: pan/zoom basemap + yield points + farm) ────
@@ -206,7 +215,7 @@ server <- function(input, output, session) {
                 colors = pal(legend_vals()),
                 labels = vapply(legend_vals(), function(v) fmt_yield(v, unit),
                                 character(1)),
-                title = paste0("Simulated yield<br>(", unit, ")"), opacity = 0.9)
+                title = paste0("Potential yield<br>(", unit, ")"), opacity = 0.9)
   })
 
   ## Cardinal farm marker (follows the coordinates) + click-to-set
@@ -219,7 +228,7 @@ server <- function(input, output, session) {
       clearGroup("farm") |>
       addAwesomeMarkers(group = "farm", lng = input$lon, lat = input$lat,
                         icon = farm_icon,
-                        popup = paste0("<b>Your field</b><br>Simulated: ", txt,
+                        popup = paste0("<b>Your field</b><br>Potential: ", txt,
                                        "<br>Nearest cell: ", round(c$dist_km, 1), " km"))
   })
 
@@ -235,20 +244,20 @@ server <- function(input, output, session) {
     parts <- list()
     if (!is.null(pr)) {
       parts <- c(parts, sprintf(
-        "At your field (nearest simulated cell %s km away), APSIM simulates a mean yield of %s for %s (40-year average at 13%% moisture; typical range %s–%s).",
+        "At your field (nearest simulated cell %s km away), the potential yield for %s is %s (40-year average at 13%% moisture; typical range %s–%s).",
         round(c$dist_km, 1),
-        fmt_yield(pr$yield_mean_kgha, input$unit),
         practice_label(pr),
+        fmt_yield(pr$yield_mean_kgha, input$unit),
         fmt_yield(pr$yield_p10_kgha, input$unit),
         fmt_yield(pr$yield_p90_kgha, input$unit)))
     }
     if (!is.null(pr) && !is.na(v)) {
       gap <- pr$yield_mean_kgha - v
       parts <- c(parts, if (gap > 0)
-        sprintf("Your reported yield of %s is %s below the simulated mean — a potential gap to close through management.",
+        sprintf("Your actual yield of %s is %s below the potential — a gap to close through management.",
                 fmt_yield(v, input$unit), fmt_yield(gap, input$unit))
         else
-        sprintf("Your reported yield of %s meets or exceeds the simulated mean — you are farming at or above the simulated potential here.",
+        sprintf("Your actual yield of %s meets or exceeds the potential — you are farming at or above the modelled potential here.",
                 fmt_yield(v, input$unit)))
     }
     tagList(lapply(parts, function(p) tags$p(p)))

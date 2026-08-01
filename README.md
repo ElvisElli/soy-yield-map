@@ -107,10 +107,10 @@ A single-file Shiny app (`app/app.R`). The grower:
 
 The app finds the nearest simulated grid cell and shows:
 
-- A **boxplot** of the simulated 40-year yield distribution for the grower's
-  selected practice, the grower's reported yield as a **bar**, and a right-hand
-  **summary card** (always in **bu/ac**) with the potential (simulated mean),
-  real (reported) and **yield gap**. The y-axis is fixed at **0–120 bu/ac**.
+- Three responsive **value tiles** — **potential yield** (40-year simulated
+  mean), **actual yield** (the grower's reported yield) and the **yield gap**,
+  in bu/ac — above a simple **bar chart** comparing potential vs. actual on a
+  fixed 0–120 bu/ac axis. The tiles reflow to a single column on phones.
 - An **interactive Leaflet map** (pan/zoom, map/satellite basemap) showing the
   **whole state of Arkansas with county outlines**, and the cardinal-red yield
   surface across the **eastern** soybean region (western cells dropped); click

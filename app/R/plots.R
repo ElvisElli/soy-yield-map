@@ -1,114 +1,69 @@
-## plots.R — UARK-branded ggplot2 figures for the soy-yield-map app.
-## Kept separate from app.R so the visuals can evolve independently and be
-## reused (e.g. exported as static figures for the university website).
+## plots.R — UARK-branded ggplot2 figure for the soy-yield-map app.
+## Kept separate from app.R so the visual can evolve independently and be
+## reused (e.g. exported as a static figure for the university website).
 ##
 ## All yield values passed in are kg/ha at 13% market moisture (the app grosses
 ## up the APSIM dry-matter yields on load — see app.R).
 
 library(ggplot2)
 
-## ── University of Arkansas brand palette ─────────────────────────────────
+## ── Palette — University of Arkansas cardinal + refined neutrals ──────────
 UARK <- list(
-  cardinal = "#9D2235",  # primary — PMS 201
-  dark     = "#6E121E",
-  gray     = "#54585A",
-  lgray    = "#B1B3B3",
-  cream    = "#F7EEF0",
+  cardinal = "#9D2235",  # potential yield  (primary — PMS 201)
+  steel    = "#3F5B74",  # actual yield     (professional steel-blue)
+  gold     = "#B0842F",  # yield gap        (muted "opportunity" gold)
+  ink      = "#33373B",  # body text
+  gray     = "#5B6169",  # muted labels
   ## light → deep cardinal sequential ramp for the yield surface
-  ramp     = c("#FBEAEC", "#E3A2AA", "#C05A67", "#9D2235", "#6E121E")
+  ramp     = c("#F4E7E2", "#DCA9A2", "#C06E6A", "#9D2235", "#6E121E")
 )
 
 BU_AC_KG_HA <- 67.25   # 1 bu/ac = 67.25 kg/ha at 13% moisture
 
 ## Shared theme: clean, print-quality, university-website friendly.
-theme_uark <- function(base_size = 13) {
+theme_uark <- function(base_size = 14) {
   theme_minimal(base_size = base_size) +
     theme(
-      text            = element_text(colour = "#2b2b2b"),
-      plot.title      = element_text(face = "bold", colour = UARK$cardinal,
-                                     size = rel(1.05)),
-      plot.subtitle   = element_text(colour = UARK$gray, size = rel(0.9)),
-      plot.title.position = "plot",
-      axis.title      = element_text(colour = UARK$gray),
+      text             = element_text(colour = UARK$ink),
+      axis.title       = element_text(colour = UARK$gray, size = rel(0.9)),
+      axis.text.x      = element_text(colour = UARK$ink, size = rel(1.0)),
       panel.grid.minor = element_blank(),
       panel.grid.major.x = element_blank(),
-      legend.position = "none",
-      plot.margin     = margin(8, 12, 8, 8)
+      legend.position  = "none",
+      plot.margin      = margin(6, 10, 4, 6)
     )
 }
 
 .to_unit  <- function(v, unit) if (identical(unit, "bu/ac")) v / BU_AC_KG_HA else v
 .unit_lab <- function(unit) if (identical(unit, "bu/ac")) "Yield (bu/ac)" else "Yield (kg/ha)"
 .y_max    <- function(unit) if (identical(unit, "bu/ac")) 120 else 120 * BU_AC_KG_HA
-.fmt_u    <- function(kgha, unit) {
-  v <- .to_unit(kgha, unit)
-  if (is.na(v)) return("—")
-  if (identical(unit, "bu/ac")) sprintf("%.1f bu/ac", v)
-  else sprintf("%s kg/ha", formatC(round(v), big.mark = ",", format = "f", digits = 0))
-}
 
-## ── Bar plot: simulated average + observed bar + summary card ─────────────
-## `row` = ONE yield-surface row (the scenario the farmer selected), market kg/ha.
-## `observed_kgha` = the farmer's reported yield in market kg/ha (may be NA).
-make_barplot <- function(row, observed_kgha = NA, unit = "bu/ac",
-                         scenario_label = "Simulated") {
+## Format a yield in bu/ac (used for the value tiles, always bushels).
+fmt_buac <- function(kgha) if (is.na(kgha)) "—" else sprintf("%.1f bu/ac", kgha / BU_AC_KG_HA)
+
+## ── Bar plot: potential (simulated mean) vs. actual (reported) yield ──────
+## `row` = ONE yield-surface row (the selected scenario), market kg/ha.
+## `observed_kgha` = the farmer's actual yield in market kg/ha (may be NA).
+## No in-plot titles/cards — those live in responsive HTML above the chart.
+make_barplot <- function(row, observed_kgha = NA, unit = "bu/ac") {
   sc   <- function(v) .to_unit(v, unit)
   ymax <- .y_max(unit)
-  potential <- row$yield_mean_kgha              # kg/ha (market)
-  gap <- if (is.na(observed_kgha)) NA_real_ else potential - observed_kgha
+  lv   <- c("Potential", "Actual")
 
-  ## Positions on a numeric x-axis: [simulated bar] .. [your bar] .. [card]
-  x_sim <- 0.75; x_bar <- 1.65; w <- 0.5
+  df <- data.frame(type = factor("Potential", levels = lv), x = 1,
+                   y = sc(row$yield_mean_kgha))
+  if (!is.na(observed_kgha))
+    df <- rbind(df, data.frame(type = factor("Actual", levels = lv), x = 2,
+                               y = sc(observed_kgha)))
 
-  ## simulated 40-year average yield
-  g <- ggplot() +
-    geom_col(data = data.frame(x = x_sim, y = sc(potential)),
-             aes(x = x, y = y), width = w, fill = UARK$cardinal) +
-    geom_text(data = data.frame(x = x_sim, y = sc(potential)),
-              aes(x = x, y = y, label = round(y, 1)),
-              vjust = -0.6, fontface = "bold", colour = UARK$cardinal, size = 3.6)
-
-  ## observed yield as a bar
-  if (!is.na(observed_kgha)) {
-    g <- g +
-      geom_col(data = data.frame(x = x_bar, y = sc(observed_kgha)),
-               aes(x = x, y = y), width = w, fill = UARK$gray) +
-      geom_text(data = data.frame(x = x_bar, y = sc(observed_kgha)),
-                aes(x = x, y = y, label = round(y, 1)),
-                vjust = -0.6, fontface = "bold", colour = UARK$gray, size = 3.6)
-  }
-
-  ## ── Summary card on the RIGHT: one row each for potential / real / gap ──
-  ## Always shown in bushels/acre, regardless of the axis unit.
-  fmt_bu <- function(kgha) if (is.na(kgha)) "—" else sprintf("%.1f bu/ac", kgha / BU_AC_KG_HA)
-  card_x <- c(2.35, 3.95)
-  lx <- card_x[1] + 0.08      # left-aligned labels
-  rx <- card_x[2] - 0.08      # right-aligned values
-  g <- g +
-    annotate("rect", xmin = card_x[1], xmax = card_x[2],
-             ymin = 0.10 * ymax, ymax = 1.00 * ymax,
-             fill = UARK$cream, colour = UARK$cardinal, linewidth = 0.5) +
-    annotate("text", x = mean(card_x), y = 0.90 * ymax, label = "YIELD SUMMARY",
-             fontface = "bold", colour = UARK$cardinal, size = 3.6)
-
-  card_row <- function(g, y0, label, value, col) {
-    g +
-      annotate("text", x = lx, y = y0 * ymax, label = label, hjust = 0,
-               colour = UARK$gray, size = 3.3) +
-      annotate("text", x = rx, y = y0 * ymax, label = value, hjust = 1,
-               fontface = "bold", colour = col, size = 3.9)
-  }
-  g <- card_row(g, 0.66, "Potential", fmt_bu(potential), UARK$cardinal)
-  g <- card_row(g, 0.42, "Your yield", fmt_bu(observed_kgha), UARK$gray)
-  g <- card_row(g, 0.20, "Yield gap", fmt_bu(gap), UARK$dark)
-
-  g +
-    scale_x_continuous(limits = c(0, 4), breaks = c(x_sim, x_bar),
-                       labels = c("Simulated\n(40-yr avg)", "Your\nfield")) +
-    scale_y_continuous(limits = c(0, ymax), expand = expansion(mult = c(0, 0.02))) +
-    labs(title = "Simulated average yield vs. your reported yield",
-         subtitle = paste0(scenario_label, "  ·  40-year mean simulated yield"),
-         x = NULL, y = .unit_lab(unit)) +
-    theme_uark() +
-    theme(axis.text.x = element_text(size = rel(0.95)))
+  ggplot(df, aes(x = x, y = y, fill = type)) +
+    geom_col(width = 0.58) +
+    geom_text(aes(label = round(y, 1)), vjust = -0.5, fontface = "bold",
+              colour = UARK$ink, size = 4.3) +
+    scale_fill_manual(values = c(Potential = UARK$cardinal, Actual = UARK$steel)) +
+    scale_x_continuous(limits = c(0.4, 2.6), breaks = c(1, 2),
+                       labels = c("Potential\nyield", "Actual\nyield")) +
+    scale_y_continuous(limits = c(0, ymax), expand = expansion(mult = c(0, 0.05))) +
+    labs(x = NULL, y = .unit_lab(unit)) +
+    theme_uark()
 }

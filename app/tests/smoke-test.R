@@ -32,11 +32,11 @@ stopifnot(practice_label(lp) == "MG4, planted late May")
 ## 2. Plot builder -------------------------------------------------------------
 source("R/plots.R")
 crow <- surface[surface$cellid == nc$cellid & surface$scenario == "baseline", ][1, ]
-gb <- make_barplot(crow, observed_kgha = 3000, unit = "bu/ac",
-                   scenario_label = "MG4, planted late May")
+gb <- make_barplot(crow, observed_kgha = 3000, unit = "bu/ac")
 stopifnot(inherits(gb, "ggplot"))
 ggplot2::ggplot_build(gb)  # force evaluation
-cat("[ok] plots: simulated-vs-observed bar plot builds without error\n")
+stopifnot(fmt_buac(3362.5) == "50.0 bu/ac")
+cat("[ok] plots: potential-vs-actual bar plot builds; bu/ac formatter ok\n")
 
 ## 3. Full reactive server test ------------------------------------------------
 app <- source("app.R", local = new.env())$value
