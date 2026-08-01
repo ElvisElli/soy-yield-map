@@ -52,6 +52,9 @@ CELLS <- unique(SURFACE[, c("cellid", "x", "y")])
 MG_CHOICES     <- sort(unique(SURFACE$mg))
 window_choices <- function(mg) sort(unique(SURFACE$plant_window[SURFACE$mg == mg]))
 
+## Where the "Send feedback" button routes (edit to change the recipient).
+FEEDBACK_EMAIL <- "eelli@uark.edu"
+
 ## Shared colour scale for the map (market kg/ha)
 YIELD_RANGE <- range(SURFACE$yield_mean_kgha, na.rm = TRUE)
 pal <- leaflet::colorNumeric(UARK$ramp, domain = YIELD_RANGE, na.color = "#e6e6e6")
@@ -103,6 +106,13 @@ ui <- page_sidebar(
     ),
     helpText("Yields shown at 13% market moisture."),
     hr(),
+    ## Feedback — opens the visitor's email client (works on the static site).
+    ## Change the address below to route feedback elsewhere.
+    tags$a(
+      href = paste0("mailto:", FEEDBACK_EMAIL,
+                    "?subject=Soybean%20Yield-Gap%20Map%20feedback"),
+      class = "btn btn-outline-secondary btn-sm w-100",
+      "✉ Send feedback"),
     helpText(textOutput("provenance", inline = TRUE))
   ),
 
@@ -121,7 +131,6 @@ ui <- page_sidebar(
   ),
   card(
     full_screen = TRUE,
-    card_header("Potential yield across Arkansas"),
     leafletOutput("map", height = 520)
   )
 )
