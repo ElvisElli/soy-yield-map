@@ -111,9 +111,10 @@ The app finds the nearest simulated grid cell and shows:
   selected practice, the grower's reported yield as a **bar**, and a right-hand
   **summary card** (always in **bu/ac**) with the potential (simulated mean),
   real (reported) and **yield gap**. The y-axis is fixed at **0–120 bu/ac**.
-- An **interactive Leaflet map** (pan/zoom, map/satellite basemap) of the
-  cardinal-red yield surface across the **eastern Arkansas** soybean region
-  (western cells dropped); click the map to drop a pin and locate a field.
+- An **interactive Leaflet map** (pan/zoom, map/satellite basemap) showing the
+  **whole state of Arkansas with county outlines**, and the cardinal-red yield
+  surface across the **eastern** soybean region (western cells dropped); click
+  the map to drop a pin and locate a field.
 - A narrative summary of the simulated mean, its typical range, and the gap.
 
 The interface is styled in **University of Arkansas cardinal (#9D2235)** so the

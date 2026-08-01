@@ -147,30 +147,30 @@ dir.create(dirname(OUT_CSV), recursive = TRUE, showWarnings = FALSE)
 readr::write_csv(surface, OUT_CSV)
 message("[export] wrote ", OUT_CSV, " (", round(file.size(OUT_CSV) / 1024), " KB)")
 
-## ── Fortify AR state + county boundaries to plain data frames ─────────────
-## Stored in Albers so the Shiny app can draw them with geom_polygon/geom_path
-## and never needs the sf package itself (keeps the shinylive build light).
+## ── Fortify AR state + county boundaries to plain lon/lat data frames ─────
+## Stored as lon (x) / lat (y) with a ring `group` so the Shiny app can draw
+## them on the Leaflet map (as polylines) without needing the sf package.
 fortify_sf <- function(geom) {
   co <- as.data.frame(sf::st_coordinates(geom))
   ## Build a unique ring id from whatever hierarchy columns are present
   idc <- intersect(c("L3", "L2", "L1"), names(co))
   co$group <- do.call(paste, c(co[idc], sep = "_"))
-  data.frame(x = round(co$X, 1), y = round(co$Y, 1),
+  data.frame(x = round(co$X, 5), y = round(co$Y, 5),
              group = co$group, stringsAsFactors = FALSE)
 }
 
 if (file.exists(STATE_SHP) && file.exists(COUNTY_SHP)) {
   ark <- sf::st_read(STATE_SHP, quiet = TRUE)
   ark <- ark[ark$STUSPS == "AR", ]
-  ark <- sf::st_transform(ark, ALBERS)
+  ark <- sf::st_transform(ark, 4326)
   readr::write_csv(fortify_sf(sf::st_geometry(ark)), OUT_STATE)
   message("[export] wrote ", OUT_STATE)
 
   cty <- sf::st_read(COUNTY_SHP, quiet = TRUE)
-  cty <- sf::st_transform(cty, ALBERS)
+  cty <- sf::st_transform(cty, 4326)
   ## Light simplification keeps the file small without visible loss at map scale
   cty <- sf::st_make_valid(cty)
-  cty <- sf::st_simplify(cty, dTolerance = 200, preserveTopology = TRUE)
+  cty <- sf::st_simplify(cty, dTolerance = 0.003, preserveTopology = TRUE)
   cty_geom <- sf::st_collection_extract(sf::st_geometry(cty), "POLYGON")
   readr::write_csv(fortify_sf(cty_geom), OUT_COUNTY)
   message("[export] wrote ", OUT_COUNTY)

@@ -52,10 +52,22 @@ CELLS <- unique(SURFACE[, c("cellid", "x", "y")])
 MG_CHOICES     <- sort(unique(SURFACE$mg))
 window_choices <- function(mg) sort(unique(SURFACE$plant_window[SURFACE$mg == mg]))
 
-## Shared colour scale + initial view for the map (market kg/ha, lon/lat)
+## Shared colour scale for the map (market kg/ha)
 YIELD_RANGE <- range(SURFACE$yield_mean_kgha, na.rm = TRUE)
 pal <- leaflet::colorNumeric(UARK$ramp, domain = YIELD_RANGE, na.color = "#e6e6e6")
-AR_CENTER <- list(lng = mean(range(CELLS$x)), lat = mean(range(CELLS$y)))
+
+## Full Arkansas state + county outlines (lon/lat), drawn as the map background.
+## NA separators let a single addPolylines() call draw every ring.
+STATE_DF  <- read.csv("data/ar-state.csv",   stringsAsFactors = FALSE)
+COUNTY_DF <- read.csv("data/ar-counties.csv", stringsAsFactors = FALSE)
+poly_na <- function(df) {
+  parts <- split(df, df$group)
+  list(lng = unlist(lapply(parts, function(p) c(p$x, NA))),
+       lat = unlist(lapply(parts, function(p) c(p$y, NA))))
+}
+STATE_LINE  <- poly_na(STATE_DF)
+COUNTY_LINE <- poly_na(COUNTY_DF)
+STATE_BB    <- list(lng = range(STATE_DF$x), lat = range(STATE_DF$y))
 
 ## ── UI ───────────────────────────────────────────────────────────────────
 ui <- page_sidebar(
@@ -163,7 +175,15 @@ server <- function(input, output, session) {
       addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") |>
       addLayersControl(baseGroups = c("Map", "Satellite"),
                        options = layersControlOptions(collapsed = TRUE)) |>
-      setView(AR_CENTER$lng, AR_CENTER$lat, zoom = 7)
+      ## whole-state background: county lines (thin) + state outline (bold)
+      addPolylines(lng = COUNTY_LINE$lng, lat = COUNTY_LINE$lat,
+                   color = "#8a8a8a", weight = 0.6, opacity = 0.7,
+                   group = "boundaries") |>
+      addPolylines(lng = STATE_LINE$lng, lat = STATE_LINE$lat,
+                   color = "#54585A", weight = 1.6, opacity = 0.9,
+                   group = "boundaries") |>
+      fitBounds(STATE_BB$lng[1], STATE_BB$lat[1],
+                STATE_BB$lng[2], STATE_BB$lat[2])
   })
 
   ## Draw the yield surface for the selected practice (canvas circle markers)
