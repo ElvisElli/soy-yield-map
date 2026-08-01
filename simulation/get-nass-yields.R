@@ -19,8 +19,10 @@ setwd_here <- function() {
 setwd_here()
 suppressPackageStartupMessages(library(jsonlite))
 
-## Public Quick Stats key (same one used in the soybean-ar-climate-change repo).
-NASS_KEY <- Sys.getenv("NASS_API_KEY", "D228A372-93ED-3BF7-9699-D2D0DDD3C88D")
+## Quick Stats key: use the NASS_API_KEY env var if set (e.g. a CI secret),
+## otherwise fall back to the public key used in the soybean-ar-climate-change repo.
+NASS_KEY <- Sys.getenv("NASS_API_KEY")
+if (!nzchar(NASS_KEY)) NASS_KEY <- "D228A372-93ED-3BF7-9699-D2D0DDD3C88D"
 N_YEARS  <- 5
 OUT_CSV  <- file.path("..", "app", "data", "nass-county-yield.csv")
 

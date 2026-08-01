@@ -1,0 +1,55 @@
+name: Refresh NASS county yields
+
+# Once a year, re-download the latest USDA-NASS county soybean yields and, if
+# they changed, commit the updated CSV. That commit touches app/data/**, which
+# triggers the deploy workflow, so the live site's county benchmark stays
+# current with no manual steps.
+#
+# Runs mid-February (after the prior year's county estimates are finalized) and
+# can also be run on demand from the Actions tab.
+#
+# Optional: set a repo secret NASS_API_KEY to use your own Quick Stats key;
+# otherwise the script falls back to the public key.
+
+on:
+  schedule:
+    - cron: "0 8 15 2 *"     # 08:00 UTC on 15 February, yearly
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-nass
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "release"
+
+      - name: Install jsonlite
+        run: install.packages("jsonlite")
+        shell: Rscript {0}
+
+      - name: Download latest NASS county yields
+        env:
+          NASS_API_KEY: ${{ secrets.NASS_API_KEY }}
+        run: Rscript simulation/get-nass-yields.R
+
+      - name: Commit if the data changed
+        run: |
+          if git diff --quiet -- app/data/nass-county-yield.csv; then
+            echo "No change in NASS county yields — nothing to commit."
+          else
+            git config user.name  "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add app/data/nass-county-yield.csv
+            git commit -m "Auto-refresh NASS county soybean yields"
+            git push
+          fi
