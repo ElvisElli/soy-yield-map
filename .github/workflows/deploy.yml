@@ -1,9 +1,12 @@
 name: Deploy Shiny app to GitHub Pages
 
 # Builds app/ into a static WebAssembly site with shinylive and publishes it to
-# GitHub Pages. The app then runs entirely in the visitor's browser — no server.
+# a `gh-pages` branch. This avoids the GitHub Pages "environment" machinery
+# (which is sensitive to the default-branch setting) and just pushes the built
+# site to a branch that Pages serves.
 #
-# One-time setup: repo Settings ▸ Pages ▸ Source = "GitHub Actions".
+# One-time setup: repo Settings ▸ Pages ▸ Source = "Deploy from a branch",
+# Branch = "gh-pages" / "(root)".
 
 on:
   push:
@@ -14,16 +17,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write        # needed to push the built site to gh-pages
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,16 +43,9 @@ jobs:
           shinylive::export("app", "_site")
         shell: Rscript {0}
 
-      - uses: actions/upload-pages-artifact@v3
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: _site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
