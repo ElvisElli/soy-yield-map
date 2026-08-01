@@ -75,3 +75,37 @@ run_cell <- function(apsimx_file, dir) {
   if (is.null(out) || !nrow(out)) return(NULL)
   out
 }
+
+## Simulate every scenario for ONE cell using its cached weather + soil.
+## Returns a tidy data.frame (cellid, x, y, scenario meta, Date, Yield_kgha) or
+## NULL. Fully self-contained (all inputs are arguments) so it runs unchanged on
+## a PSOCK worker (Windows) or a fork (Linux) — the cell's weather/soil must
+## already be cached by 01-get-weather-soil.R.
+run_one_cell <- function(cell, scenarios, template, date_start, date_end,
+                         weather_dir, soil_dir) {
+  met   <- file.path(weather_dir, paste0(cell$cellid, ".met"))
+  soilf <- file.path(soil_dir,    paste0(cell$cellid, ".rds"))
+  if (!file.exists(met) || !file.exists(soilf)) return(NULL)
+  soil <- readRDS(soilf)
+
+  rows <- lapply(seq_len(nrow(scenarios)), function(s) {
+    sc  <- scenarios[s, ]
+    dir <- tempfile(paste0("cell", cell$cellid, "_"))
+    dir.create(dir, showWarnings = FALSE)
+    on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+    f <- tryCatch(build_cell(template, dir, sc, met, soil, date_start, date_end),
+                  error = function(e) NULL)
+    if (is.null(f)) return(NULL)
+    res <- run_cell(f, dir)
+    if (is.null(res)) return(NULL)
+    date_col <- grep("Clock.Today$|^Date$", names(res), value = TRUE)[1]
+    data.frame(
+      cellid = cell$cellid, x = cell$lon, y = cell$lat,
+      cultivar = sc$cultivar, sowing = sc$sow_date, scenario = sc$name,
+      climate.control = sc$climate.control, co2 = sc$co2,
+      Date = as.Date(res[[date_col]]), Yield_kgha = res$Yield_kgha,
+      stringsAsFactors = FALSE)
+  })
+  out <- do.call(rbind, rows)
+  if (is.null(out) || !nrow(out)) NULL else out
+}

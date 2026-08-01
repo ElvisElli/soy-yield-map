@@ -63,15 +63,18 @@ automatically.
 
 ## Parallelism
 
-`02-run-apsim.R` uses fork-based `parallel::mclapply` (ideal on a Linux cloud
-box). On Windows it falls back to a single core — run large jobs in the cloud,
-or subset the grid with `N_CELLS`.
+`02-run-apsim.R` runs APSIM across all cores using a **PSOCK cluster**
+(`parallel` + `doParallel`/`foreach`) — full multi-core on **both Windows and
+Linux/macOS/cloud**, the same approach as the climate-change study. Core count
+is `N_CORES` in `config.R` (default `detectCores() - 2`); it falls back to
+sequential automatically if only one core is available.
 
 ## Required R packages
 
-`apsimx`, `nasapower`, `soilDB`, `sf`, `dplyr`, `readr`, `parallel`.
+`apsimx`, `nasapower`, `soilDB`, `sf`, `dplyr`, `readr`, `parallel`,
+`doParallel`, `foreach`, `jsonlite`.
 (`nasapower` → weather, `soilDB` → SSURGO soil, `sf` → project cells + boundaries
-in the export.)
+in the export, `doParallel`/`foreach` → the PSOCK cluster, `jsonlite` → NASS.)
 
 ## Data sources
 
