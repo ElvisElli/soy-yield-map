@@ -45,8 +45,13 @@ SURFACE[ycols] <- SURFACE[ycols] / (1 - GRAIN_MOISTURE)
 ## cells so the interactive map shows only the delta cropland.
 SURFACE <- SURFACE[SURFACE$x_alb >= 360000 & SURFACE$x_alb <= 570000, , drop = FALSE]
 
-## Unique cells for the map / nearest-cell search
-CELLS <- unique(SURFACE[, c("cellid", "x", "y")])
+## Unique cells for the map / nearest-cell search (county tags the NASS county)
+CELLS <- unique(SURFACE[, c("cellid", "x", "y", "county")])
+
+## County-level NASS soybean yield (bu/ac, 5-yr average) for the benchmark bar
+NASS <- read.csv("data/nass-county-yield.csv", stringsAsFactors = FALSE)
+NASS_YIELD <- setNames(NASS$yield_bu, NASS$county)     # UPPERCASE county -> bu/ac
+NASS_YEARS <- if (nrow(NASS)) sprintf("%d–%d", NASS$year_min[1], NASS$year_max[1]) else ""
 
 ## Practice choices, constrained to what was actually simulated
 MG_CHOICES     <- sort(unique(SURFACE$mg))
@@ -105,6 +110,7 @@ ui <- page_sidebar(
                              c("bu/ac", "kg/ha"), selected = "bu/ac"))
     ),
     helpText("Yields shown at 13% market moisture."),
+    checkboxInput("benchmark", "Add county 5-yr NASS average", value = FALSE),
     hr(),
     ## Feedback — opens the visitor's email client (works on the static site).
     ## Change the address below to route feedback elsewhere.
@@ -127,7 +133,8 @@ ui <- page_sidebar(
       value_box("Yield gap", textOutput("vb_gap"), max_height = "100px",
                 theme = value_box_theme(bg = "#B0842F", fg = "white"))
     ),
-    plotOutput("barplot", height = "260px")
+    plotOutput("barplot", height = "260px"),
+    uiOutput("bench_note")
   ),
   card(
     full_screen = TRUE,
@@ -171,10 +178,35 @@ server <- function(input, output, session) {
     if (is.null(pr) || is.na(v)) "—" else fmt_buac(pr$yield_mean_kgha - v)
   })
 
+  ## County NASS 5-yr average (market kg/ha) for the optional benchmark bar
+  benchmark_kgha <- reactive({
+    if (!isTRUE(input$benchmark)) return(NA_real_)
+    c <- cell(); if (is.null(c) || is.na(c$county)) return(NA_real_)
+    by <- NASS_YIELD[[as.character(c$county)]]
+    if (is.null(by) || is.na(by)) return(NA_real_)
+    buac_to_kgha(by)                       # bu/ac -> market kg/ha
+  })
+
   output$barplot <- renderPlot({
     pr <- pred_row(); req(pr)
-    make_barplot(pr, observed_kgha = my_kgha(), unit = input$unit)
+    make_barplot(pr, observed_kgha = my_kgha(), unit = input$unit,
+                 benchmark_kgha = benchmark_kgha())
   }, res = 96)
+
+  output$bench_note <- renderUI({
+    if (!isTRUE(input$benchmark)) return(NULL)
+    c <- cell(); if (is.null(c)) return(NULL)
+    county <- if (is.na(c$county)) NA else tools::toTitleCase(tolower(as.character(c$county)))
+    by <- if (!is.na(c$county)) NASS_YIELD[[as.character(c$county)]] else NULL
+    if (is.null(by) || is.na(by))
+      tags$small(class = "text-muted",
+        sprintf("No NASS soybean-yield record for %s County.",
+                ifelse(is.na(county), "this", county)))
+    else
+      tags$small(class = "text-muted",
+        sprintf("Green bar: %s County USDA-NASS soybean yield, %s average (%.1f bu/ac).",
+                county, NASS_YEARS, by))
+  })
 
   ## ── Interactive map (Leaflet: pan/zoom basemap + yield points + farm) ────
   map_cells <- reactive({

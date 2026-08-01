@@ -33,10 +33,17 @@ stopifnot(practice_label(lp) == "MG4, planted late May")
 source("R/plots.R")
 crow <- surface[surface$cellid == nc$cellid & surface$scenario == "baseline", ][1, ]
 gb <- make_barplot(crow, observed_kgha = 3000, unit = "bu/ac")
-stopifnot(inherits(gb, "ggplot"))
-ggplot2::ggplot_build(gb)  # force evaluation
+gbench <- make_barplot(crow, observed_kgha = 3000, unit = "bu/ac", benchmark_kgha = 3800)
+stopifnot(inherits(gb, "ggplot"), inherits(gbench, "ggplot"))
+ggplot2::ggplot_build(gb); ggplot2::ggplot_build(gbench)  # force evaluation
 stopifnot(fmt_buac(3362.5) == "50.0 bu/ac")
-cat("[ok] plots: potential-vs-actual bar plot builds; bu/ac formatter ok\n")
+cat("[ok] plots: bar plot (+ NASS benchmark) builds; bu/ac formatter ok\n")
+
+## NASS county benchmark data present and joinable
+nass <- read.csv("data/nass-county-yield.csv", stringsAsFactors = FALSE)
+stopifnot(nrow(nass) > 10, "county" %in% names(nass), "yield_bu" %in% names(nass))
+stopifnot("county" %in% names(surface), any(!is.na(surface$county)))
+cat(sprintf("[ok] NASS: %d counties; surface tagged with county\n", nrow(nass)))
 
 ## 3. Full reactive server test ------------------------------------------------
 app <- source("app.R", local = new.env())$value
@@ -48,10 +55,13 @@ testServer(app, {
   pr <- pred_row()
   stopifnot(!is.null(pr), identical(pr$scenario, "baseline"))
   stopifnot(nrow(map_cells()) > 100)
-  ## yields grossed to 13% moisture -> higher than the raw dry values
-  cat(sprintf("[ok] server: scenario=%s, sim mean(13%%)=%.0f kg/ha (%.1f bu/ac), map cells=%d\n",
-              pr$scenario, pr$yield_mean_kgha, pr$yield_mean_kgha / 67.25,
-              nrow(map_cells())))
+  ## benchmark off by default -> NA; on -> a positive kg/ha for a Delta county
+  stopifnot(is.na(benchmark_kgha()))
+  session$setInputs(benchmark = TRUE)
+  bk <- benchmark_kgha()
+  cat(sprintf("[ok] server: sim mean=%.1f bu/ac, county=%s, NASS benchmark=%s\n",
+              pr$yield_mean_kgha / 67.25, cell()$county,
+              if (is.na(bk)) "none" else sprintf("%.1f bu/ac", bk / 67.25)))
 })
 
 cat("\nALL SMOKE TESTS PASSED\n")

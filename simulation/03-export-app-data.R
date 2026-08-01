@@ -140,7 +140,18 @@ alb <- sf::st_as_sf(cell_xy, coords = c("x", "y"), crs = 4326) %>%
   sf::st_coordinates()
 cell_xy$x_alb <- round(alb[, 1], 1)
 cell_xy$y_alb <- round(alb[, 2], 1)
-surface <- surface %>% left_join(cell_xy[c("cellid", "x_alb", "y_alb")], by = "cellid")
+
+## Tag each cell with its county (for the NASS county-yield benchmark overlay)
+if (file.exists(COUNTY_SHP)) {
+  suppressWarnings(sf::sf_use_s2(FALSE))
+  cy <- sf::st_transform(sf::st_read(COUNTY_SHP, quiet = TRUE)["NAME"], 4326)
+  pts <- sf::st_as_sf(cell_xy, coords = c("x", "y"), crs = 4326, remove = FALSE)
+  cell_xy$county <- toupper(trimws(sf::st_join(pts, cy, join = sf::st_within)$NAME))
+} else {
+  cell_xy$county <- NA_character_
+}
+surface <- surface %>%
+  left_join(cell_xy[c("cellid", "x_alb", "y_alb", "county")], by = "cellid")
 
 ## ── Write outputs ────────────────────────────────────────────────────────
 dir.create(dirname(OUT_CSV), recursive = TRUE, showWarnings = FALSE)

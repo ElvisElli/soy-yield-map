@@ -115,7 +115,10 @@ The app finds the nearest simulated grid cell and shows:
   **whole state of Arkansas with county outlines**, and the cardinal-red yield
   surface across the **eastern** soybean region (western cells dropped); click
   the map to drop a pin and locate a field.
-- A narrative summary of the simulated mean, its typical range, and the gap.
+- An optional **county benchmark**: tick "Add county 5-yr NASS average" and a
+  green bar shows the field's county USDA-NASS soybean yield (5-year average),
+  pre-downloaded by `simulation/get-nass-yields.R` — a real-world reference next
+  to the modelled potential and the grower's actual yield.
 
 The interface is styled in **University of Arkansas cardinal (#9D2235)** so the
 map and figure can be embedded directly in a university web page.

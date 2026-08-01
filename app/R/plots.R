@@ -11,7 +11,8 @@ library(ggplot2)
 UARK <- list(
   cardinal = "#9D2235",  # potential yield  (primary — PMS 201)
   steel    = "#3F5B74",  # actual yield     (professional steel-blue)
-  gold     = "#B0842F",  # yield gap        (muted "opportunity" gold)
+  green    = "#2E7D32",  # county NASS benchmark
+  gold     = "#B0842F",  # (spare accent)
   ink      = "#33373B",  # body text
   gray     = "#5B6169",  # muted labels
   ## light → deep cardinal sequential ramp for the yield surface
@@ -43,26 +44,35 @@ fmt_buac <- function(kgha) if (is.na(kgha)) "—" else sprintf("%.1f bu/ac", kgh
 
 ## ── Bar plot: potential (simulated mean) vs. actual (reported) yield ──────
 ## `row` = ONE yield-surface row (the selected scenario), market kg/ha.
-## `observed_kgha` = the farmer's actual yield in market kg/ha (may be NA).
-## No in-plot titles/cards — those live in responsive HTML above the chart.
-make_barplot <- function(row, observed_kgha = NA, unit = "bu/ac") {
+## `observed_kgha`  = the farmer's actual yield in market kg/ha (may be NA).
+## `benchmark_kgha` = optional county NASS 5-yr average (market kg/ha); when
+##                    supplied, a third green benchmark bar is drawn.
+make_barplot <- function(row, observed_kgha = NA, unit = "bu/ac",
+                         benchmark_kgha = NA) {
   sc   <- function(v) .to_unit(v, unit)
   ymax <- .y_max(unit)
-  lv   <- c("Potential", "Actual")
+  lv   <- c("Potential", "Actual", "County")
 
   df <- data.frame(type = factor("Potential", levels = lv), x = 1,
                    y = sc(row$yield_mean_kgha))
   if (!is.na(observed_kgha))
     df <- rbind(df, data.frame(type = factor("Actual", levels = lv), x = 2,
                                y = sc(observed_kgha)))
+  if (!is.na(benchmark_kgha))
+    df <- rbind(df, data.frame(type = factor("County", levels = lv), x = 3,
+                               y = sc(benchmark_kgha)))
+
+  xmax <- if (!is.na(benchmark_kgha)) 3.6 else 2.6
 
   ggplot(df, aes(x = x, y = y, fill = type)) +
     geom_col(width = 0.58) +
     geom_text(aes(label = round(y, 1)), vjust = -0.5, fontface = "bold",
               colour = UARK$ink, size = 4.3) +
-    scale_fill_manual(values = c(Potential = UARK$cardinal, Actual = UARK$steel)) +
-    scale_x_continuous(limits = c(0.4, 2.6), breaks = c(1, 2),
-                       labels = c("Potential\nyield", "Actual\nyield")) +
+    scale_fill_manual(values = c(Potential = UARK$cardinal, Actual = UARK$steel,
+                                 County = UARK$green)) +
+    scale_x_continuous(limits = c(0.4, xmax), breaks = c(1, 2, 3),
+                       labels = c("Potential\nyield", "Actual\nyield",
+                                  "County avg\n(NASS 5-yr)")) +
     scale_y_continuous(limits = c(0, ymax), expand = expansion(mult = c(0, 0.05))) +
     labs(x = NULL, y = .unit_lab(unit)) +
     theme_uark()

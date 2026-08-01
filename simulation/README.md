@@ -13,6 +13,7 @@ config.R                ← the one file you edit (scenarios, grid, years, cores
                           data/raw/soil/<cellid>.rds      (USDA SSURGO)
 02-run-apsim.R          → data/outputs/simulated-scenarios-df.rds
 03-export-app-data.R    → ../app/data/yield-surface.csv (+ ar-state/ar-counties)
+get-nass-yields.R       → ../app/data/nass-county-yield.csv (county benchmark)
 run-all.R               → runs 01 → 02 → 03
 R/data.R, R/apsim.R     → helper library (download, build, run)
 templates/…apsimx       → APSIM soybean template (MG4/MG5/MG6 cultivars)
