@@ -47,34 +47,26 @@ theme_uark <- function(base_size = 13) {
   else sprintf("%s kg/ha", formatC(round(v), big.mark = ",", format = "f", digits = 0))
 }
 
-## ── Boxplot: simulated distribution + observed bar + summary card ─────────
+## ── Bar plot: simulated average + observed bar + summary card ─────────────
 ## `row` = ONE yield-surface row (the scenario the farmer selected), market kg/ha.
 ## `observed_kgha` = the farmer's reported yield in market kg/ha (may be NA).
-make_boxplot <- function(row, observed_kgha = NA, unit = "bu/ac",
+make_barplot <- function(row, observed_kgha = NA, unit = "bu/ac",
                          scenario_label = "Simulated") {
   sc   <- function(v) .to_unit(v, unit)
   ymax <- .y_max(unit)
   potential <- row$yield_mean_kgha              # kg/ha (market)
   gap <- if (is.na(observed_kgha)) NA_real_ else potential - observed_kgha
 
-  ## Positions on a numeric x-axis: [simulated box] .. [your bar] .. [card]
-  x_box <- 0.75; x_bar <- 1.65; w <- 0.5
+  ## Positions on a numeric x-axis: [simulated bar] .. [your bar] .. [card]
+  x_sim <- 0.75; x_bar <- 1.65; w <- 0.5
 
-  boxdf <- data.frame(
-    x = x_box,
-    ymin = sc(row$yield_min_kgha),   lower = sc(row$yield_p25_kgha),
-    middle = sc(row$yield_median_kgha), upper = sc(row$yield_p75_kgha),
-    ymax = sc(row$yield_max_kgha)
-  )
-
+  ## simulated 40-year average yield
   g <- ggplot() +
-    ## simulated distribution
-    geom_boxplot(
-      data = boxdf,
-      aes(x = x, ymin = ymin, lower = lower, middle = middle,
-          upper = upper, ymax = ymax),
-      stat = "identity", width = w, fill = UARK$cardinal,
-      colour = UARK$dark, linewidth = 0.5)
+    geom_col(data = data.frame(x = x_sim, y = sc(potential)),
+             aes(x = x, y = y), width = w, fill = UARK$cardinal) +
+    geom_text(data = data.frame(x = x_sim, y = sc(potential)),
+              aes(x = x, y = y, label = round(y, 1)),
+              vjust = -0.6, fontface = "bold", colour = UARK$cardinal, size = 3.6)
 
   ## observed yield as a bar
   if (!is.na(observed_kgha)) {
@@ -111,12 +103,11 @@ make_boxplot <- function(row, observed_kgha = NA, unit = "bu/ac",
   g <- card_row(g, 0.20, "Yield gap", fmt_bu(gap), UARK$dark)
 
   g +
-    scale_x_continuous(limits = c(0, 4), breaks = c(x_box, x_bar),
-                       labels = c("Simulated\n(40 years)", "Your\nfield")) +
+    scale_x_continuous(limits = c(0, 4), breaks = c(x_sim, x_bar),
+                       labels = c("Simulated\n(40-yr avg)", "Your\nfield")) +
     scale_y_continuous(limits = c(0, ymax), expand = expansion(mult = c(0, 0.02))) +
-    labs(title = "Simulated yield vs. your reported yield",
-         subtitle = paste0(scenario_label,
-                           "  ·  box = min–max, quartiles and median across 40 years"),
+    labs(title = "Simulated average yield vs. your reported yield",
+         subtitle = paste0(scenario_label, "  ·  40-year mean simulated yield"),
          x = NULL, y = .unit_lab(unit)) +
     theme_uark() +
     theme(axis.text.x = element_text(size = rel(0.95)))

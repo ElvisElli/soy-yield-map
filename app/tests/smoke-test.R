@@ -32,11 +32,11 @@ stopifnot(practice_label(lp) == "MG4, planted late May")
 ## 2. Plot builder -------------------------------------------------------------
 source("R/plots.R")
 crow <- surface[surface$cellid == nc$cellid & surface$scenario == "baseline", ][1, ]
-gb <- make_boxplot(crow, observed_kgha = 3000, unit = "bu/ac",
+gb <- make_barplot(crow, observed_kgha = 3000, unit = "bu/ac",
                    scenario_label = "MG4, planted late May")
 stopifnot(inherits(gb, "ggplot"))
 ggplot2::ggplot_build(gb)  # force evaluation
-cat("[ok] plots: simulated-vs-observed boxplot builds without error\n")
+cat("[ok] plots: simulated-vs-observed bar plot builds without error\n")
 
 ## 3. Full reactive server test ------------------------------------------------
 app <- source("app.R", local = new.env())$value

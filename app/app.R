@@ -144,7 +144,7 @@ server <- function(input, output, session) {
 
   output$boxplot <- renderPlot({
     pr <- pred_row(); req(pr)
-    make_boxplot(pr, observed_kgha = my_kgha(), unit = input$unit,
+    make_barplot(pr, observed_kgha = my_kgha(), unit = input$unit,
                  scenario_label = practice_label(pr))
   }, res = 96)
 
