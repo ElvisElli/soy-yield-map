@@ -4,8 +4,8 @@
 ## Quick Stats API and write a per-county 5-year average benchmark the app can
 ## overlay on its chart.
 ##
-## Same rationale as the sowing-progress downloader in the climate-change study
-## (Quick Stats API), just pulling YIELD instead of PROGRESS.
+## Same rationale as the sowing-progress downloader in the soybean-ar-climate-
+## change repo (Quick Stats API), just pulling YIELD instead of PROGRESS.
 ##
 ## Output: ../app/data/nass-county-yield.csv  (county, yield_bu, n_years, years)
 ##
@@ -19,7 +19,7 @@ setwd_here <- function() {
 setwd_here()
 suppressPackageStartupMessages(library(jsonlite))
 
-## Public Quick Stats key (same one used by the climate-change report).
+## Public Quick Stats key (same one used in the soybean-ar-climate-change repo).
 NASS_KEY <- Sys.getenv("NASS_API_KEY", "D228A372-93ED-3BF7-9699-D2D0DDD3C88D")
 N_YEARS  <- 5
 OUT_CSV  <- file.path("..", "app", "data", "nass-county-yield.csv")
