@@ -24,6 +24,7 @@
 library(shiny)
 library(bslib)
 library(ggplot2)
+library(leaflet)
 
 source("R/helpers.R", local = TRUE)
 source("R/plots.R", local = TRUE)
@@ -40,23 +41,21 @@ GRAIN_MOISTURE <- 0.13
 ycols <- grep("^yield_.*_kgha$", names(SURFACE), value = TRUE)
 SURFACE[ycols] <- SURFACE[ycols] / (1 - GRAIN_MOISTURE)
 
-## Restrict to eastern Arkansas (the soybean region) — matches the manuscript
-## maps' coord_sf(xlim = c(360000, 570000)) crop.
+## Restrict to eastern Arkansas (the soybean region) — drops the sparse western
+## cells so the interactive map shows only the delta cropland.
 SURFACE <- SURFACE[SURFACE$x_alb >= 360000 & SURFACE$x_alb <= 570000, , drop = FALSE]
 
-## Boundaries (pre-projected to EPSG:5070 by the export script)
-STATE_DF  <- read.csv("data/ar-state.csv",   stringsAsFactors = FALSE)
-COUNTY_DF <- read.csv("data/ar-counties.csv", stringsAsFactors = FALSE)
-
 ## Unique cells for the map / nearest-cell search
-CELLS <- unique(SURFACE[, c("cellid", "x", "y", "x_alb", "y_alb")])
+CELLS <- unique(SURFACE[, c("cellid", "x", "y")])
 
 ## Practice choices, constrained to what was actually simulated
 MG_CHOICES     <- sort(unique(SURFACE$mg))
 window_choices <- function(mg) sort(unique(SURFACE$plant_window[SURFACE$mg == mg]))
 
-## Shared colour scale across the map (market kg/ha)
-FILL_LIMITS <- range(SURFACE$yield_mean_kgha, na.rm = TRUE)
+## Shared colour scale + initial view for the map (market kg/ha, lon/lat)
+YIELD_RANGE <- range(SURFACE$yield_mean_kgha, na.rm = TRUE)
+pal <- leaflet::colorNumeric(UARK$ramp, domain = YIELD_RANGE, na.color = "#e6e6e6")
+AR_CENTER <- list(lng = mean(range(CELLS$x)), lat = mean(range(CELLS$y)))
 
 ## ── UI ───────────────────────────────────────────────────────────────────
 ui <- page_sidebar(
@@ -73,7 +72,7 @@ ui <- page_sidebar(
       column(6, numericInput("lon", "Longitude", value = -91.5,
                              min = -95, max = -89.5, step = 0.01))
     ),
-    helpText("Enter your field's coordinates to locate it on the map."),
+    helpText("Type coordinates or click the map to drop a pin."),
     hr(),
 
     h5("Your practice"),
@@ -99,7 +98,7 @@ ui <- page_sidebar(
   card(
     full_screen = TRUE,
     card_header("Simulated soybean yield across eastern Arkansas"),
-    plotOutput("map", height = 520)
+    leafletOutput("map", height = 520)
   ),
   card(
     card_header("What this means for your field"),
@@ -149,19 +148,62 @@ server <- function(input, output, session) {
                  scenario_label = practice_label(pr))
   }, res = 96)
 
-  ## ── Map (ggplot: state + county + yield raster + farm) ──────────────────
+  ## ── Interactive map (Leaflet: pan/zoom basemap + yield points + farm) ────
   map_cells <- reactive({
     d <- SURFACE[SURFACE$mg == input$mg & SURFACE$plant_window == input$window, ]
     if (nrow(d) == 0) d <- SURFACE[SURFACE$scenario == "baseline", ]
-    unique(d[, c("x_alb", "y_alb", "yield_mean_kgha")])
+    unique(d[, c("x", "y", "yield_mean_kgha", "yield_median_kgha")])
+  })
+  legend_vals <- reactive(seq(YIELD_RANGE[1], YIELD_RANGE[2], length.out = 5))
+
+  output$map <- renderLeaflet({
+    leaflet(options = leafletOptions(minZoom = 6, maxZoom = 13,
+                                     preferCanvas = TRUE)) |>
+      addProviderTiles(providers$CartoDB.Positron, group = "Map") |>
+      addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") |>
+      addLayersControl(baseGroups = c("Map", "Satellite"),
+                       options = layersControlOptions(collapsed = TRUE)) |>
+      setView(AR_CENTER$lng, AR_CENTER$lat, zoom = 7)
   })
 
-  output$map <- renderPlot({
-    c <- cell()
-    farm <- if (is.null(c)) NULL else c(c$x_alb, c$y_alb)
-    make_map(map_cells(), STATE_DF, COUNTY_DF, farm = farm,
-             unit = input$unit, fill_limits = FILL_LIMITS)
-  }, res = 96)
+  ## Draw the yield surface for the selected practice (canvas circle markers)
+  observe({
+    d <- map_cells(); unit <- input$unit
+    fmt_v <- function(v) vapply(v, function(x) fmt_yield(x, unit), character(1))
+    labs <- sprintf("<b>%s</b><br>median %s",
+                    fmt_v(d$yield_mean_kgha), fmt_v(d$yield_median_kgha))
+    leafletProxy("map", data = d) |>
+      clearGroup("cells") |>
+      removeControl("yield-legend") |>
+      addCircleMarkers(
+        group = "cells", lng = ~x, lat = ~y, radius = 5,
+        stroke = FALSE, fillOpacity = 0.9, fillColor = ~pal(yield_mean_kgha),
+        label = lapply(labs, htmltools::HTML)) |>
+      addLegend("bottomright", layerId = "yield-legend",
+                colors = pal(legend_vals()),
+                labels = vapply(legend_vals(), function(v) fmt_yield(v, unit),
+                                character(1)),
+                title = paste0("Simulated yield<br>(", unit, ")"), opacity = 0.9)
+  })
+
+  ## Cardinal farm marker (follows the coordinates) + click-to-set
+  farm_icon <- makeAwesomeIcon(icon = "map-marker", markerColor = "darkred",
+                               iconColor = "#ffffff", library = "fa")
+  observe({
+    c <- cell(); req(c); pr <- pred_row()
+    txt <- if (is.null(pr)) "not simulated" else fmt_yield(pr$yield_mean_kgha, input$unit)
+    leafletProxy("map") |>
+      clearGroup("farm") |>
+      addAwesomeMarkers(group = "farm", lng = input$lon, lat = input$lat,
+                        icon = farm_icon,
+                        popup = paste0("<b>Your field</b><br>Simulated: ", txt,
+                                       "<br>Nearest cell: ", round(c$dist_km, 1), " km"))
+  })
+
+  observeEvent(input$map_click, {
+    updateNumericInput(session, "lat", value = round(input$map_click$lat, 3))
+    updateNumericInput(session, "lon", value = round(input$map_click$lng, 3))
+  })
 
   ## ── Narrative explanation ──────────────────────────────────────────────
   output$explain <- renderUI({

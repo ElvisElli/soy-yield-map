@@ -57,8 +57,8 @@ make_boxplot <- function(row, observed_kgha = NA, unit = "bu/ac",
   potential <- row$yield_mean_kgha              # kg/ha (market)
   gap <- if (is.na(observed_kgha)) NA_real_ else potential - observed_kgha
 
-  ## Positions on a numeric x-axis: [card] .. [simulated box] .. [your bar]
-  x_box <- 2.55; x_bar <- 3.45; w <- 0.5
+  ## Positions on a numeric x-axis: [simulated box] .. [your bar] .. [card]
+  x_box <- 0.75; x_bar <- 1.65; w <- 0.5
 
   boxdf <- data.frame(
     x = x_box,
@@ -86,8 +86,10 @@ make_boxplot <- function(row, observed_kgha = NA, unit = "bu/ac",
                 vjust = -0.6, fontface = "bold", colour = UARK$gray, size = 3.6)
   }
 
-  ## ── Summary card on the left: one row each for potential / real / gap ──
-  card_x <- c(0.10, 1.95)
+  ## ── Summary card on the RIGHT: one row each for potential / real / gap ──
+  ## Always shown in bushels/acre, regardless of the axis unit.
+  fmt_bu <- function(kgha) if (is.na(kgha)) "—" else sprintf("%.1f bu/ac", kgha / BU_AC_KG_HA)
+  card_x <- c(2.35, 3.95)
   lx <- card_x[1] + 0.08      # left-aligned labels
   rx <- card_x[2] - 0.08      # right-aligned values
   g <- g +
@@ -104,10 +106,9 @@ make_boxplot <- function(row, observed_kgha = NA, unit = "bu/ac",
       annotate("text", x = rx, y = y0 * ymax, label = value, hjust = 1,
                fontface = "bold", colour = col, size = 3.9)
   }
-  g <- card_row(g, 0.66, "Potential", .fmt_u(potential, unit), UARK$cardinal)
-  g <- card_row(g, 0.42, "Your yield", .fmt_u(observed_kgha, unit), UARK$gray)
-  g <- card_row(g, 0.20, "Yield gap",
-                if (is.na(gap)) "—" else .fmt_u(gap, unit), UARK$dark)
+  g <- card_row(g, 0.66, "Potential", fmt_bu(potential), UARK$cardinal)
+  g <- card_row(g, 0.42, "Your yield", fmt_bu(observed_kgha), UARK$gray)
+  g <- card_row(g, 0.20, "Yield gap", fmt_bu(gap), UARK$dark)
 
   g +
     scale_x_continuous(limits = c(0, 4), breaks = c(x_box, x_bar),
@@ -119,46 +120,4 @@ make_boxplot <- function(row, observed_kgha = NA, unit = "bu/ac",
          x = NULL, y = .unit_lab(unit)) +
     theme_uark() +
     theme(axis.text.x = element_text(size = rel(0.95)))
-}
-
-## ── Map: filled yield surface with AR state + county outlines ─────────────
-## Mirrors the manuscript maps: EPSG:5070, state fill + county lines, western
-## crop. Everything is pre-projected so this needs only ggplot2 (no sf).
-## `cells` needs columns x_alb, y_alb, yield_mean_kgha (market kg/ha).
-## `farm` = c(x_alb, y_alb) of the selected field, or NULL.
-XLIM_ALBERS <- c(360000, 570000)   # crops the (non-soybean) western third
-TILE_M      <- 2500                # grid pitch in metres (matches sim grid)
-
-make_map <- function(cells, state_df, county_df, farm = NULL, unit = "bu/ac",
-                     fill_limits = NULL) {
-  cells <- cells[cells$x_alb >= XLIM_ALBERS[1] & cells$x_alb <= XLIM_ALBERS[2], ]
-  ylim <- range(state_df$y)
-
-  g <- ggplot() +
-    geom_polygon(data = state_df, aes(x = x, y = y, group = group),
-                 fill = "#ECECEC", colour = "#8A8A8A", linewidth = 0.4) +
-    geom_tile(data = cells, aes(x = x_alb, y = y_alb, fill = yield_mean_kgha),
-              width = TILE_M, height = TILE_M) +
-    geom_path(data = county_df, aes(x = x, y = y, group = group),
-              colour = "#6b6b6b", linewidth = 0.22) +
-    scale_fill_gradientn(
-      colours = UARK$ramp, limits = fill_limits,
-      labels = function(b) round(.to_unit(b, unit)),
-      name = if (identical(unit, "bu/ac")) "Yield\n(bu/ac)" else "Yield\n(kg/ha)")
-
-  if (!is.null(farm)) {
-    fdf <- data.frame(x = farm[1], y = farm[2])
-    g <- g +
-      geom_point(data = fdf, aes(x = x, y = y), shape = 21, size = 4.2,
-                 stroke = 1.1, fill = UARK$cardinal, colour = "white")
-  }
-
-  g +
-    coord_fixed(ratio = 1, xlim = XLIM_ALBERS, ylim = ylim, expand = FALSE) +
-    theme_void(base_size = 13) +
-    theme(
-      legend.position = "right",
-      legend.title = element_text(colour = UARK$gray, size = rel(0.85)),
-      plot.margin = margin(6, 6, 6, 6)
-    )
 }

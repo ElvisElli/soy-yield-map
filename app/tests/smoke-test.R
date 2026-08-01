@@ -44,7 +44,7 @@ testServer(app, {
   session$setInputs(lat = 34.75, lon = -91.5, mg = "MG4", window = "late May",
                     myyield = 45, unit = "bu/ac")
   stopifnot(!is.null(cell()))
-  stopifnot(!is.null(cell()$x_alb))          # projected coords available
+  stopifnot(!is.null(cell()$x), !is.null(cell()$y))   # lon/lat for the map
   pr <- pred_row()
   stopifnot(!is.null(pr), identical(pr$scenario, "baseline"))
   stopifnot(nrow(map_cells()) > 100)

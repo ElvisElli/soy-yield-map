@@ -108,13 +108,12 @@ A single-file Shiny app (`app/app.R`). The grower:
 The app finds the nearest simulated grid cell and shows:
 
 - A **boxplot** of the simulated 40-year yield distribution for the grower's
-  selected practice, the grower's reported yield as a **bar**, and a left-hand
-  **summary card** with the potential (simulated mean), real (reported) and
-  **yield gap**. The y-axis is fixed at **0–120 bu/ac** for easy comparison.
-- A **map** rendered like the study's manuscript figures — EPSG:5070 (Conus
-  Albers), **Arkansas state fill + county outlines**, a cardinal-red yield
-  raster, and the field marked — cropped to the eastern (soybean) half of the
-  state, exactly matching the paper's `coord_sf(xlim = c(360000, 570000))`.
+  selected practice, the grower's reported yield as a **bar**, and a right-hand
+  **summary card** (always in **bu/ac**) with the potential (simulated mean),
+  real (reported) and **yield gap**. The y-axis is fixed at **0–120 bu/ac**.
+- An **interactive Leaflet map** (pan/zoom, map/satellite basemap) of the
+  cardinal-red yield surface across the **eastern Arkansas** soybean region
+  (western cells dropped); click the map to drop a pin and locate a field.
 - A narrative summary of the simulated mean, its typical range, and the gap.
 
 The interface is styled in **University of Arkansas cardinal (#9D2235)** so the
@@ -127,8 +126,7 @@ grower's measured, market-moisture yield (1 bu/ac = 67.25 kg/ha at 13%).
 
 > This first version focuses on the **current-climate baseline**. The warming
 > (+2 °C) scenarios are still produced by the simulation and can be layered back
-> into the app when needed. The map uses only `ggplot2` (projection and
-> boundaries are pre-baked by the export), so the app needs no `sf`/`leaflet`.
+> into the app when needed.
 
 ### Run locally
 
