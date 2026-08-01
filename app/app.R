@@ -124,15 +124,7 @@ ui <- page_sidebar(
 
   card(
     fill = FALSE,
-    layout_column_wrap(
-      width = 1/3, fixed_width = FALSE, heights_equal = "row", gap = "0.5rem",
-      value_box("Potential yield", textOutput("vb_pot"), max_height = "100px",
-                theme = value_box_theme(bg = "#9D2235", fg = "white")),
-      value_box("Actual yield", textOutput("vb_act"), max_height = "100px",
-                theme = value_box_theme(bg = "#3F5B74", fg = "white")),
-      value_box("Yield gap", textOutput("vb_gap"), max_height = "100px",
-                theme = value_box_theme(bg = "#B0842F", fg = "white"))
-    ),
+    uiOutput("tiles"),
     plotOutput("barplot", height = "260px"),
     uiOutput("bench_note")
   ),
@@ -176,6 +168,26 @@ server <- function(input, output, session) {
   output$vb_gap <- renderText({
     pr <- pred_row(); v <- my_kgha()
     if (is.null(pr) || is.na(v)) "—" else fmt_buac(pr$yield_mean_kgha - v)
+  })
+  output$vb_cty <- renderText({
+    b <- benchmark_kgha(); if (is.na(b)) "—" else fmt_buac(b)
+  })
+
+  ## Headline tiles: 3 by default, +County-avg tile when the benchmark is on
+  output$tiles <- renderUI({
+    on <- isTRUE(input$benchmark)
+    h  <- if (on) "120px" else "100px"     # a touch taller when 4 tiles wrap
+    box <- function(title, id, bg) value_box(
+      title, textOutput(id), max_height = h,
+      theme = value_box_theme(bg = bg, fg = "white"))
+    tiles <- list(box("Potential yield", "vb_pot", "#9D2235"),
+                  box("Actual yield",    "vb_act", "#3F5B74"),
+                  box("Yield gap",       "vb_gap", "#B0842F"))
+    if (on) tiles <- c(tiles, list(box("County avg (NASS)", "vb_cty", "#2E7D32")))
+    do.call(layout_column_wrap,
+            c(list(width = if (on) 1/4 else 1/3,
+                   fixed_width = FALSE, heights_equal = "row", gap = "0.5rem"),
+              tiles))
   })
 
   ## County NASS 5-yr average (market kg/ha) for the optional benchmark bar
