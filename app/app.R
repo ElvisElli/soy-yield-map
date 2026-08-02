@@ -230,13 +230,22 @@ server <- function(input, output, session) {
   map_cells <- reactive({
     d <- SURFACE[SURFACE$mg == input$mg & SURFACE$plant_window == input$window, ]
     if (nrow(d) == 0) d <- SURFACE[SURFACE$scenario == "baseline", ]
-    unique(d[, c("x", "y", "yield_mean_kgha", "yield_median_kgha")])
+    ## Thin the ~4,500-cell fine grid to a coarser display grid (mean yield per
+    ## ~0.06° bin). The full grid overwhelmed the mobile renderer (dots never
+    ## painted); ~1,000 points render reliably and fast on phones.
+    res <- 0.06
+    agg <- aggregate(d$yield_mean_kgha,
+                     list(x = round(d$x / res) * res, y = round(d$y / res) * res),
+                     mean, na.rm = TRUE)
+    names(agg)[3] <- "yield_mean_kgha"
+    agg
   })
   legend_vals <- reactive(seq(YIELD_RANGE[1], YIELD_RANGE[2], length.out = 5))
 
   output$map <- renderLeaflet({
-    leaflet(options = leafletOptions(minZoom = 6, maxZoom = 13,
-                                     preferCanvas = TRUE)) |>
+    ## SVG renderer (default) — the canvas renderer left the yield dots blank on
+    ## mobile Safari. With the thinned grid, SVG renders reliably and stays fast.
+    leaflet(options = leafletOptions(minZoom = 6, maxZoom = 13)) |>
       addProviderTiles(providers$CartoDB.Positron, group = "Map") |>
       addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") |>
       addLayersControl(baseGroups = c("Map", "Satellite"),
@@ -272,7 +281,7 @@ server <- function(input, output, session) {
       clearGroup("cells") |>
       removeControl("yield-legend") |>
       addCircleMarkers(
-        group = "cells", lng = ~x, lat = ~y, radius = 5,
+        group = "cells", lng = ~x, lat = ~y, radius = 6,
         stroke = FALSE, fillOpacity = 0.9, fillColor = ~pal(yield_mean_kgha),
         options = pathOptions(interactive = FALSE)) |>
       addLegend("bottomright", layerId = "yield-legend",
