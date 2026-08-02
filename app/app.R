@@ -249,22 +249,32 @@ server <- function(input, output, session) {
                    color = "#54585A", weight = 1.6, opacity = 0.9,
                    group = "boundaries") |>
       fitBounds(STATE_BB$lng[1], STATE_BB$lat[1],
-                STATE_BB$lng[2], STATE_BB$lat[2])
+                STATE_BB$lng[2], STATE_BB$lat[2]) |>
+      ## Mobile: the map card can lay out at the wrong size (it's below the fold),
+      ## leaving tiles/markers blank until a resize. Recalculate size after render
+      ## and on rotation/resize so the yield points always paint.
+      htmlwidgets::onRender(
+        "function(el, x) {
+           var map = this;
+           var fix = function() { map.invalidateSize(); };
+           setTimeout(fix, 300); setTimeout(fix, 1200);
+           window.addEventListener('resize', fix);
+         }")
   })
 
-  ## Draw the yield surface for the selected practice (canvas circle markers)
+  ## Draw the yield surface for the selected practice (canvas circle markers).
+  ## The dots are non-interactive so a tap anywhere on the map — including over
+  ## the cropland — falls through to the map and drops the field pin (essential
+  ## on touch screens, where the old per-cell hover labels did nothing anyway).
   observe({
     d <- map_cells(); unit <- input$unit
-    fmt_v <- function(v) vapply(v, function(x) fmt_yield(x, unit), character(1))
-    labs <- sprintf("<b>%s</b><br>median %s",
-                    fmt_v(d$yield_mean_kgha), fmt_v(d$yield_median_kgha))
     leafletProxy("map", data = d) |>
       clearGroup("cells") |>
       removeControl("yield-legend") |>
       addCircleMarkers(
         group = "cells", lng = ~x, lat = ~y, radius = 5,
         stroke = FALSE, fillOpacity = 0.9, fillColor = ~pal(yield_mean_kgha),
-        label = lapply(labs, htmltools::HTML)) |>
+        options = pathOptions(interactive = FALSE)) |>
       addLegend("bottomright", layerId = "yield-legend",
                 colors = pal(legend_vals()),
                 labels = vapply(legend_vals(), function(v) fmt_yield(v, unit),
