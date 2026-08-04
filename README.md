@@ -13,29 +13,60 @@ maturity group or planting date.
 ![The soy-yield-map app: yield-distribution plots above a cardinal-red map of
 predicted soybean yield across Arkansas](docs/screenshot.png)
 
-The repository has **two loosely-coupled components** so each can evolve
-independently:
+## Quick start
+
+```r
+# In RStudio: open soy-yield-map.Rproj, open run.R, and click "Source".
+# Or from a shell in the repo root:
+Rscript run.R
+```
+
+**`run.R` is the master switchboard.** Open it and flip a few TRUE/FALSE switches
+to choose what to run — no need to dig into the sub-scripts:
+
+```r
+RUN_HISTORICAL <- TRUE    # simulation/      40-year grid → yield map
+RUN_CURRENT    <- FALSE   # current_season/  in-season daily soil-water map
+LAUNCH_APP     <- FALSE   # app/             open the interactive map locally
+
+TEST_MODE      <- TRUE    # run just a few cells first to check it works…
+TEST_N_CELLS   <- 5       # …before the full state (hours)
+```
+
+Each component also has its **own RStudio project** (`simulation/simulation.Rproj`,
+`current_season/current_season.Rproj`, `app/app.Rproj`) if you'd rather open and
+run one at a time — opening it sets the working directory correctly.
+
+## Repository layout
+
+Three loosely-coupled components, each independent:
 
 ```
 soy-yield-map/
-├── simulation/     COMPONENT 1 — the modeling engine (R + APSIM NG)
-│   ├── config.R              ← edit here: scenarios, grid, years
-│   ├── 01-get-weather-soil.R download NASA POWER weather + SSURGO soil
+├── run.R              MASTER — choose what to run (historical / current / app)
+├── soy-yield-map.Rproj
+│
+├── simulation/        COMPONENT 1 — HISTORICAL engine (40-year grid, R + APSIM)
+│   ├── config.R              ← edit here: scenarios, root params, grid, years
+│   ├── 01-get-weather-soil.R download+condition NASA POWER weather + SSURGO soil
 │   ├── 02-run-apsim.R        run APSIM across cells × scenarios (parallel)
-│   ├── 03-export-app-data.R  aggregate results → compact yield surface
-│   ├── run-all.R             run 01 → 02 → 03 in order
-│   ├── R/                    helper library (data.R, apsim.R)
-│   └── templates/            APSIM soybean template (.apsimx)
+│   ├── 03-export-app-data.R  aggregate → app/data/yield-surface.csv
+│   ├── run-all.R             run 01 → 02 → 03
+│   ├── R/ · templates/       helpers + APSIM soybean template
 │
-├── app/            COMPONENT 2 — the interactive tool (R Shiny + ggplot2)
-│   ├── app.R                 the Shiny application
+├── current_season/   COMPONENT 1b — IN-SEASON engine (this year, daily soil water)
+│   ├── config.R              ← edit here: year, scenario, thresholds
+│   ├── 01-get-weather.R      this year's daily weather (reuses conditioned soils)
+│   ├── 02-run-apsim.R        daily soil-water template per cell (parallel)
+│   ├── 03-export-app-data.R  latest day → app/data/soil-water.csv
+│   ├── run-all.R · R/ · templates/
+│
+├── app/              COMPONENT 2 — the interactive tool (R Shiny + Leaflet)
+│   ├── app.R                 two tabs: Yield-gap map · In-season soil water
 │   ├── R/                    helpers (units/moisture) + UARK plots
-│   └── data/
-│       ├── yield-surface.csv baked per-cell predictions the app reads
-│       └── ar-*.csv          pre-projected state + county boundaries
+│   └── data/                 yield-surface.csv · soil-water.csv · boundaries
 │
-└── .github/workflows/
-    └── deploy.yml            build the app to WebAssembly, publish to Pages
+└── .github/workflows/        deploy (WebAssembly → Pages) + weekly refreshes
 ```
 
 ## How the two components connect

@@ -71,6 +71,8 @@ SW_ADEQUATE_MAX <- 70    # <= 70%  → "Adequate";  above → "Excess"
 GRID_FILE <- "../simulation/data/raw/sim-grid.rds"
 ## NULL = every cultivated cell; an integer = first N (quick test); a vector = cellids.
 N_CELLS   <- NULL
+## The master run.R can force a small test subset without editing the line above.
+if (nzchar(Sys.getenv("SOY_N_CELLS"))) N_CELLS <- as.integer(Sys.getenv("SOY_N_CELLS"))
 
 
 ## ── COMPUTE ──────────────────────────────────────────────────────────────

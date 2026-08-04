@@ -85,6 +85,8 @@ GRID_FILE <- "data/raw/sim-grid.rds"
 ##   an integer    the first N cells               ← fast trial (e.g. 5)
 ##   a vector      specific cellids
 N_CELLS   <- NULL
+## The master run.R can force a small test subset without editing the line above.
+if (nzchar(Sys.getenv("SOY_N_CELLS"))) N_CELLS <- as.integer(Sys.getenv("SOY_N_CELLS"))
 
 
 ## ── SIMULATION CLOCK (years to simulate) ─────────────────────────────────
