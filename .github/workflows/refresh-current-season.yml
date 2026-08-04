@@ -55,12 +55,13 @@ jobs:
 
       - name: Commit the refreshed soil-water surface
         run: |
-          if git diff --quiet -- app/data/soil-water.csv app/data/soil-water-meta.json; then
-            echo "No change in the soil-water surface — nothing to commit."
+          files="app/data/soil-water.csv app/data/soil-water-meta.json app/data/station-timeseries.csv"
+          if git diff --quiet -- $files; then
+            echo "No change in the in-season data — nothing to commit."
           else
             git config user.name  "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add app/data/soil-water.csv app/data/soil-water-meta.json
-            git commit -m "Auto-refresh in-season soil-water map"
+            git add $files
+            git commit -m "Auto-refresh in-season soil-water + station data"
             git push
           fi

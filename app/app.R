@@ -102,6 +102,21 @@ sw_classify <- function(rel) {
          levels = c("Dry", "Adequate", "Excess"))
 }
 
+## Research-station time series (this season vs the 1985+ historical range).
+STATION_TS <- tryCatch(read.csv("data/station-timeseries.csv", stringsAsFactors = FALSE),
+                       error = function(e) NULL)
+STATION_CHOICES <- if (!is.null(STATION_TS)) sort(unique(STATION_TS$station)) else character(0)
+STATION_VARS <- c("Soil water 0–6 in"  = "rel_sw_6in",
+                  "Soil water 0–12 in" = "rel_sw_12in",
+                  "Soil water 0–24 in" = "rel_sw_24in",
+                  "Cumulative rain since Apr 1 (in)" = "CummRain_in",
+                  "Biomass (kg/ha)"    = "Biomass_kgha")
+## Month tick marks for the day-of-year x axis.
+SW_DOY_BREAKS <- as.integer(format(seq(as.Date("2001-01-01"),
+                            as.Date("2001-12-31"), by = "2 months"), "%j"))
+SW_DOY_LABELS <- format(seq(as.Date("2001-01-01"), as.Date("2001-12-31"),
+                            by = "2 months"), "%b")
+
 ## ── UI ───────────────────────────────────────────────────────────────────
 ## Tab 1 — the yield-gap map.
 tab_yieldgap <- nav_panel(
@@ -181,6 +196,19 @@ tab_inseason <- nav_panel(
     card(
       full_screen = TRUE,
       leafletOutput("sw_map", height = 560)
+    ),
+    ## Research-station time series — this season vs the historical range.
+    if (!is.null(STATION_TS)) card(
+      full_screen = TRUE,
+      card_header("Research-station tracker"),
+      fluidRow(
+        column(6, selectInput("st_station", "Station", choices = STATION_CHOICES)),
+        column(6, selectInput("st_var", "Variable", choices = STATION_VARS,
+                              selected = "rel_sw_12in"))
+      ),
+      plotOutput("sw_station_ts", height = "300px"),
+      tags$small(class = "text-muted",
+        "Red = this season · grey band = historical min–max (1985+) · grey line = median.")
     )
   )
 )
@@ -427,6 +455,22 @@ server <- function(input, output, session) {
                 colors = unname(SW_COLORS), labels = names(SW_COLORS),
                 title = "Soil water", opacity = 0.9)
   })
+
+  ## Research-station time series: this season (red) vs historical range (grey).
+  output$sw_station_ts <- renderPlot({
+    req(!is.null(STATION_TS), input$st_station, input$st_var)
+    d <- STATION_TS[STATION_TS$station == input$st_station &
+                    STATION_TS$variable == input$st_var, , drop = FALSE]
+    validate(need(nrow(d) > 0, "No data for this station/variable yet."))
+    vlab <- names(STATION_VARS)[match(input$st_var, STATION_VARS)]
+    ggplot(d, aes(doy)) +
+      geom_ribbon(aes(ymin = lo, ymax = hi), fill = "grey85") +
+      geom_line(aes(y = med), colour = "grey45") +
+      geom_line(aes(y = current), colour = "#9D2235", linewidth = 0.9, na.rm = TRUE) +
+      scale_x_continuous(breaks = SW_DOY_BREAKS, labels = SW_DOY_LABELS) +
+      labs(x = NULL, y = vlab, title = input$st_station) +
+      theme_minimal(base_size = 13)
+  }, res = 96)
 }
 
 shinyApp(ui, server)

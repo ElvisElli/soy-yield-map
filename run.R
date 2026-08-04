@@ -4,9 +4,8 @@
 ##   From RStudio:  open soy-yield-map.Rproj, open run.R, click "Source".
 ##   From a shell:  Rscript run.R      (in the repo root)
 ##
-## Each component also has its own RStudio project (simulation/simulation.Rproj,
-## current_season/current_season.Rproj, app/app.Rproj) if you prefer to work
-## inside one at a time.
+## Both simulation engines share THIS one project (soy-yield-map.Rproj); the
+## Shiny app has its own (app/app.Rproj) if you want to work on it alone.
 ## ============================================================
 
 

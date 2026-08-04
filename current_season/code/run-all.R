@@ -20,7 +20,7 @@ local({
 })
 
 steps <- c("01-get-weather.R", "02-run-apsim.R",
-           "03-export-app-data.R", "04-inspect.R")
+           "03-export-app-data.R", "04-inspect.R", "05-stations.R")
 for (s in steps) {
   message("\n=================  ", s, "  =================")
   status <- system2("Rscript", file.path("code", s))

@@ -25,7 +25,12 @@ exe <- init_apsim()
 message("[02] APSIM: ", exe)
 dir.create(CHECKPOINTS, recursive = TRUE, showWarnings = FALSE)
 
-DATE_START <- sprintf("%d-01-01", CURRENT_YEAR - SPINUP_YEARS)   # spin-up from merged history
+## Derive the daily template from the shared historical base (single source).
+build_daily_template(BASE_TEMPLATE, TEMPLATE)
+
+## Explicit clock: start (spin-up from the merged history) and end = today
+## (the latest day NASA POWER has, a few days back).
+DATE_START <- sprintf("%d-01-01", CURRENT_YEAR - SPINUP_YEARS)
 DATE_END   <- as.character(Sys.Date() - POWER_LATENCY_DAYS)
 
 cells <- load_grid(GRID_FILE, N_CELLS)

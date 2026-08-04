@@ -4,6 +4,64 @@
 
 suppressPackageStartupMessages(library(apsimx))
 
+## Daily report variables for the in-season soil-water tracker.
+.DAILY_REPORT_VARS <- c(
+  "[Clock].Today",
+  "([Soil].SoilWater.SW[1]) - ([Soil].Physical.LL15[1]) as sw1",
+  "([Soil].SoilWater.SW[2]) - ([Soil].Physical.LL15[2]) as sw2",
+  "([Soil].SoilWater.SW[3]) - ([Soil].Physical.LL15[3]) as sw3",
+  "([Soil].SoilWater.SW[4]) - ([Soil].Physical.LL15[4]) as sw4",
+  "([Soil].SoilWater.SW[5]) - ([Soil].Physical.LL15[5]) as sw5",
+  "([Soil].SoilWater.SW[6]) - ([Soil].Physical.LL15[6]) as sw6",
+  "([Soil].Physical.SAT[1]) - ([Soil].Physical.LL15[1]) as sat1",
+  "([Soil].Physical.SAT[2]) - ([Soil].Physical.LL15[2]) as sat2",
+  "([Soil].Physical.SAT[3]) - ([Soil].Physical.LL15[3]) as sat3",
+  "([Soil].Physical.SAT[4]) - ([Soil].Physical.LL15[4]) as sat4",
+  "([Soil].Physical.SAT[5]) - ([Soil].Physical.LL15[5]) as sat5",
+  "([Soil].Physical.SAT[6]) - ([Soil].Physical.LL15[6]) as sat6",
+  "sw1/sat1 as r1", "sw2/sat2 as r2", "sw3/sat3 as r3",
+  "sw4/sat4 as r4", "sw5/sat5 as r5", "sw6/sat6 as r6",
+  "(r1*2 + r2*1)/3 as rel_sw_6in",
+  "(r1+r2+r3)/3 as rel_sw_12in",
+  "(r1+r2+r3+r4+r5+r6)/6 as rel_sw_24in",
+  "[Soil].Physical.SoybeanSoil.PAWCmm[1] as swhc1",
+  "[Soil].Physical.SoybeanSoil.PAWCmm[2] as swhc2",
+  "[Soil].Physical.SoybeanSoil.PAWCmm[3] as swhc3",
+  "[Soil].Physical.SoybeanSoil.PAWCmm[4] as swhc4",
+  "[Soil].Physical.SoybeanSoil.PAWCmm[5] as swhc5",
+  "[Soil].Physical.SoybeanSoil.PAWCmm[6] as swhc6",
+  "(swhc1 + swhc2*0.5)/2.54 as swhc_6in",
+  "(swhc1+swhc2+swhc3)/2.54 as swhc_12in",
+  "(swhc1+swhc2+swhc3+swhc4+swhc5+swhc6)/2.54 as swhc_24in",
+  "sum of [Weather].Rain from 1-Apr to 31-Dec as CummRain_fromApril",
+  "max of [Soybean].Grain.Wt * 10 from [Soybean].Sowing to [Soybean].Harvesting as Yield_kgha",
+  "[Soybean].AboveGround.Wt * 10 as Biomass_kgha")
+
+## Derive the DAILY soil-water template from the shared historical base template
+## (so there is ONE maintained .apsimx). Switches every Report node to fire daily
+## and report the soil-water variables. Cached: only rebuilt if the base changed.
+build_daily_template <- function(base, out) {
+  if (!file.exists(base)) stop("Base template not found: ", base)
+  if (file.exists(out) && file.info(out)$mtime >= file.info(base)$mtime) return(out)
+  j <- jsonlite::read_json(base, simplifyVector = FALSE)
+  vars <- as.list(.DAILY_REPORT_VARS)
+  set_reports <- function(node) {
+    if (is.list(node)) {
+      if (!is.null(node[["$type"]]) && grepl("Models\\.Report", node[["$type"]])) {
+        node[["EventNames"]]    <- list("[Clock].EndOfDay")
+        node[["VariableNames"]] <- vars
+      }
+      if (!is.null(node[["Children"]]))
+        node[["Children"]] <- lapply(node[["Children"]], set_reports)
+    }
+    node
+  }
+  dir.create(dirname(out), recursive = TRUE, showWarnings = FALSE)
+  jsonlite::write_json(set_reports(j), out, auto_unbox = TRUE, pretty = TRUE,
+                       null = "null", digits = NA)
+  out
+}
+
 ## Locate the APSIM "Models" executable and point apsimx at it.
 init_apsim <- function() {
   if (.Platform$OS.type == "unix") {

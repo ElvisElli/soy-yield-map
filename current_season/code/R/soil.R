@@ -54,3 +54,17 @@ get_soil <- function(cellid, lon, lat, dir) {
   saveRDS(condition_soil(sp), rds_path)
   rds_path
 }
+
+## Merge two apsim met objects: keep historical years strictly before the current
+## record, append the current year(s), re-sort, and carry the header attributes.
+merge_met <- function(hist, cur) {
+  hd <- as.data.frame(hist); cd <- as.data.frame(cur)
+  hd <- hd[!(hd$year %in% unique(cd$year)), , drop = FALSE]   # current wins on overlap
+  comb <- rbind(hd[names(cd)], cd)
+  comb <- comb[order(comb$year, comb$day), , drop = FALSE]
+  for (a in c("units", "latitude", "longitude", "site", "colnames",
+              "comments", "constants", "tav", "amp"))
+    if (!is.null(attr(cur, a))) attr(comb, a) <- attr(cur, a)
+  class(comb) <- class(cur)
+  comb
+}

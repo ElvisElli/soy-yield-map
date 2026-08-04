@@ -86,9 +86,18 @@ CHUNK_SIZE <- 50L
 
 
 ## ── PATHS ────────────────────────────────────────────────────────────────
-TEMPLATE     <- "input/templates/soybean-daily.apsimx"
+## APSIM template — the SAME base file as the historical run. The daily-reporting
+## variant is derived from it at run time (build_daily_template in R/apsim.R), so
+## there is a single maintained template.
+BASE_TEMPLATE <- "../simulation/input/templates/soybean-mg4-baseline.apsimx"
+TEMPLATE     <- "output/soybean-daily.apsimx"   # derived; rebuilt when the base changes
 WEATHER_DIR  <- "input/weather"                   # this year merged with history
 SOIL_DIR     <- "../simulation/input/soil"        # REUSE historical conditioned soil
 HIST_WEATHER_DIR <- "../simulation/input/weather" # historical .met to merge onto
 OUT_DIR      <- "output"
 CHECKPOINTS  <- file.path(OUT_DIR, "checkpoints")
+
+## Research stations (in-season time-series at named farms/stations).
+STATIONS_FILE    <- "input/stations.csv"
+STATION_WX_DIR   <- "input/stations-weather"    # full-record .met per station (cached, merged)
+STATION_SOIL_DIR <- "input/stations-soil"

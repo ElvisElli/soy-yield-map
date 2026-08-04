@@ -32,20 +32,7 @@ options(timeout = 300)
 WX_START <- sprintf("%d-01-01", CURRENT_YEAR)
 WX_END   <- as.character(Sys.Date() - POWER_LATENCY_DAYS)
 
-## Merge two apsim met objects: keep all historical years strictly before the
-## current record, append the current year(s), re-sort, and carry the met header
-## attributes so write_apsim_met() produces a valid file.
-merge_met <- function(hist, cur) {
-  hd <- as.data.frame(hist); cd <- as.data.frame(cur)
-  hd <- hd[!(hd$year %in% unique(cd$year)), , drop = FALSE]   # current wins on overlap
-  comb <- rbind(hd[names(cd)], cd)
-  comb <- comb[order(comb$year, comb$day), , drop = FALSE]
-  for (a in c("units", "latitude", "longitude", "site", "colnames",
-              "comments", "constants", "tav", "amp"))
-    if (!is.null(attr(cur, a))) attr(comb, a) <- attr(cur, a)
-  class(comb) <- class(cur)
-  comb
-}
+## (merge_met lives in code/R/soil.R, shared with the station analysis.)
 
 ## Download the current year and merge it onto the historical record -> .met.
 get_weather <- function(cellid, lon, lat, dir) {

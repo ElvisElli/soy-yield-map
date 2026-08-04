@@ -14,7 +14,30 @@ local({
   setwd(d)
 })
 source("code/config.R")
-suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages({ library(ggplot2); library(sf) })
+
+## Arkansas outlines (shared with ../simulation) for the map background.
+load_ar <- function() {
+  crop <- "../simulation/input/cropland"
+  st <- tryCatch(st_transform(st_read(file.path(crop, "cb_2018_us_state_20m",
+                 "cb_2018_us_state_20m.shp"), quiet = TRUE), 4326), error = function(e) NULL)
+  if (!is.null(st)) st <- st[st$STUSPS == "AR", ]
+  cty <- tryCatch(st_transform(st_read(file.path(crop, "Elvis-Crop-Data",
+                 "Arkansas_Counties_4269.shp"), quiet = TRUE), 4326), error = function(e) NULL)
+  list(state = st, county = cty)
+}
+AR <- load_ar()
+ar_base <- function() {
+  g <- ggplot()
+  if (!is.null(AR$state))  g <- g + geom_sf(data = AR$state, fill = "grey92", colour = "grey40", linewidth = 0.4)
+  if (!is.null(AR$county)) g <- g + geom_sf(data = AR$county, fill = NA, colour = "grey75", linewidth = 0.2)
+  g
+}
+ar_zoom <- function() {
+  if (is.null(AR$state)) return(coord_quickmap())
+  bb <- sf::st_bbox(AR$state)
+  coord_sf(xlim = c(bb[["xmin"]], bb[["xmax"]]), ylim = c(bb[["ymin"]], bb[["ymax"]]), expand = FALSE)
+}
 
 in_rds <- file.path(OUT_DIR, "soil-water-daily.rds")
 if (!file.exists(in_rds)) stop("No results at ", in_rds, " — run 01 → 02 first.")
@@ -30,14 +53,15 @@ cols <- c(Dry = "#de2d26", Adequate = "#31a354", Excess = "#253494")
 
 dir.create("output/plots", recursive = TRUE, showWarnings = FALSE)
 
-pmap <- ggplot(latest, aes(x, y, colour = class)) +
-  geom_point(size = 1.5) +
+pmap <- ar_base() +
+  geom_point(data = latest, aes(x, y, colour = class), size = 1.6) +
   scale_colour_manual(values = cols, name = "0–6 in", drop = FALSE) +
-  coord_quickmap() +
+  ar_zoom() +
   labs(title = sprintf("In-season soil water — %s", max(latest$date)),
        subtitle = sprintf("%d cells | season %d", nrow(latest), CURRENT_YEAR),
        x = NULL, y = NULL) +
-  theme_minimal(base_size = 11)
+  theme_minimal(base_size = 11) +
+  theme(axis.text = element_blank(), panel.grid = element_blank())
 ggsave("output/plots/inspect-soil-water-map.png", pmap, width = 6, height = 7, dpi = 110, bg = "white")
 
 pbar <- ggplot(latest, aes(class, fill = class)) +
