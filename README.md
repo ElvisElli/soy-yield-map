@@ -41,25 +41,25 @@ run one at a time — opening it sets the working directory correctly.
 
 Three loosely-coupled components, each independent:
 
+Each engine folder is split into **`code/` · `input/` · `output/`** so it's
+obvious where the scripts, the data, and the results live.
+
 ```
 soy-yield-map/
 ├── run.R              MASTER — choose what to run (historical / current / app)
 ├── soy-yield-map.Rproj
 │
 ├── simulation/        COMPONENT 1 — HISTORICAL engine (40-year grid, R + APSIM)
-│   ├── config.R              ← edit here: scenarios, root params, grid, years
-│   ├── 01-get-weather-soil.R download+condition NASA POWER weather + SSURGO soil
-│   ├── 02-run-apsim.R        run APSIM across cells × scenarios (parallel)
-│   ├── 03-export-app-data.R  aggregate → app/data/yield-surface.csv
-│   ├── run-all.R             run 01 → 02 → 03
-│   ├── R/ · templates/       helpers + APSIM soybean template
+│   ├── code/          config.R (edit here) · 01 weather+soil · 02 APSIM ·
+│   │                  03 export · 04 inspect · run-all · R/
+│   ├── input/         sim-grid.rds · templates/ · cropland/ · weather/ · soil/
+│   └── output/        simulated-scenarios-df.rds · plots/ (← check results here)
 │
 ├── current_season/   COMPONENT 1b — IN-SEASON engine (this year, daily soil water)
-│   ├── config.R              ← edit here: year, scenario, thresholds
-│   ├── 01-get-weather.R      this year's daily weather (reuses conditioned soils)
-│   ├── 02-run-apsim.R        daily soil-water template per cell (parallel)
-│   ├── 03-export-app-data.R  latest day → app/data/soil-water.csv
-│   ├── run-all.R · R/ · templates/
+│   ├── code/          config.R (edit here) · 01 weather+merge · 02 APSIM ·
+│   │                  03 export · 04 inspect · run-all · R/
+│   ├── input/         templates/ · weather/ (this year, merged with history)
+│   └── output/        soil-water-daily.rds · plots/ (← check results here)
 │
 ├── app/              COMPONENT 2 — the interactive tool (R Shiny + Leaflet)
 │   ├── app.R                 two tabs: Yield-gap map · In-season soil water
@@ -68,6 +68,10 @@ soy-yield-map/
 │
 └── .github/workflows/        deploy (WebAssembly → Pages) + weekly refreshes
 ```
+
+**Where do I check results?** After any run, open the PNGs in that engine's
+`output/plots/` — a yield map + histogram (historical) or a soil-water map +
+class counts (in-season) — to confirm it worked before the full state run.
 
 ## How the two components connect
 

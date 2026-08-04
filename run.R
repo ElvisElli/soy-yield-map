@@ -11,9 +11,15 @@
 
 
 ## ── 1. WHAT DO YOU WANT TO RUN?  (set TRUE / FALSE) ──────────────────────
-RUN_HISTORICAL <- TRUE    # simulation/      40-year grid → app/data/yield-surface.csv
-RUN_CURRENT    <- FALSE   # current_season/  in-season daily soil water → soil-water.csv
-LAUNCH_APP     <- FALSE   # app/             open the interactive map locally
+## RUN_HISTORICAL  the big one-time job: download 1985–2025 weather + soil and
+##                 run the 40-year grid → app/data/yield-surface.csv
+## RUN_CURRENT     the weekly job: download ONLY the current year, MERGE it onto
+##                 the historical weather, and run the daily soil-water tracker
+##                 → app/data/soil-water.csv   (needs the historical soils first)
+## LAUNCH_APP      open the interactive map locally
+RUN_HISTORICAL <- TRUE
+RUN_CURRENT    <- FALSE
+LAUNCH_APP     <- FALSE
 
 
 ## ── 2. TEST FIRST ON A SMALL SUBSET?  (recommended) ──────────────────────
@@ -39,7 +45,7 @@ run_pipeline <- function(dir) {
   message("\n############################################################")
   message("##  ", dir, if (TEST_MODE) sprintf("  (TEST: first %d cells)", TEST_N_CELLS) else "  (FULL run)")
   message("############################################################")
-  status <- system2("Rscript", file.path(dir, "run-all.R"))
+  status <- system2("Rscript", file.path(dir, "code", "run-all.R"))
   if (status != 0) stop("Pipeline failed in ", dir, call. = FALSE)
 }
 

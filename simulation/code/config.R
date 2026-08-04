@@ -79,7 +79,7 @@ XF_VEC <- c(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0)
 
 ## ── GRID (which fields to simulate) ──────────────────────────────────────
 ## The cropland grid of cultivated cells. Each cell is one lon/lat point.
-GRID_FILE <- "data/raw/sim-grid.rds"
+GRID_FILE <- "input/sim-grid.rds"
 ## Quick test vs. full run:
 ##   NULL          every cultivated cell (~4,651)  ← full run
 ##   an integer    the first N cells               ← fast trial (e.g. 5)
@@ -91,13 +91,13 @@ if (nzchar(Sys.getenv("SOY_N_CELLS"))) N_CELLS <- as.integer(Sys.getenv("SOY_N_C
 
 ## ── SIMULATION CLOCK (years to simulate) ─────────────────────────────────
 DATE_START <- "1985-01-01"
-DATE_END   <- "2024-12-31"
+DATE_END   <- "2025-12-31"
 
 
 ## ── WEATHER / SOIL SOURCES ───────────────────────────────────────────────
 ## Weather: NASA POWER (global, daily).  Soil: USDA SSURGO (CONUS).
 ## Both download once per cell and cache on disk (fully resumable).
-WEATHER_YEARS <- c(1984, 2024)   # POWER range to fetch (>= the sim clock)
+WEATHER_YEARS <- c(1984, 2025)   # POWER range to fetch (>= the sim clock)
 
 
 ## ── COMPUTE ──────────────────────────────────────────────────────────────
@@ -107,8 +107,8 @@ CHUNK_SIZE <- 50L                # cells per checkpoint (resume granularity)
 
 
 ## ── PATHS (relative to simulation/) ──────────────────────────────────────
-TEMPLATE     <- "templates/soybean-mg4-baseline.apsimx"
-WEATHER_DIR  <- "data/raw/weather"
-SOIL_DIR     <- "data/raw/soil"
-OUT_DIR      <- "data/outputs"
+TEMPLATE     <- "input/templates/soybean-mg4-baseline.apsimx"
+WEATHER_DIR  <- "input/weather"
+SOIL_DIR     <- "input/soil"
+OUT_DIR      <- "output"
 CHECKPOINTS  <- file.path(OUT_DIR, "checkpoints")

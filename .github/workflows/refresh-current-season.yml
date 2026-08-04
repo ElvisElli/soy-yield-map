@@ -50,7 +50,7 @@ jobs:
         shell: Rscript {0}
 
       - name: Run the in-season pipeline
-        run: Rscript run-all.R
+        run: Rscript code/run-all.R
         working-directory: current_season
 
       - name: Commit the refreshed soil-water surface

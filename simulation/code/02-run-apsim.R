@@ -14,14 +14,16 @@
 ## Run:  Rscript 02-run-apsim.R      (from simulation/)
 ## ============================================================
 
-setwd_here <- function() {
+## set the working directory to the component root (folder with code/ input/ output/)
+local({
   a <- commandArgs(FALSE); f <- grep("^--file=", a, value = TRUE)
-  if (length(f)) setwd(dirname(normalizePath(sub("^--file=", "", f[1]))))
-}
-setwd_here()
-source("config.R")
-source("R/data.R")
-source("R/apsim.R")
+  d <- if (length(f)) dirname(normalizePath(sub("^--file=", "", f[1]))) else getwd()
+  while (!file.exists(file.path(d, "code", "config.R")) && dirname(d) != d) d <- dirname(d)
+  setwd(d)
+})
+source("code/config.R")
+source("code/R/data.R")
+source("code/R/apsim.R")
 suppressPackageStartupMessages({
   library(parallel); library(foreach); library(doParallel)
 })
@@ -48,7 +50,7 @@ if (!is.null(cl)) {
   registerDoParallel(cl)
   ## Each worker is a fresh R process: load the library files and point apsimx
   ## at the APSIM executable (done once, reused for every chunk).
-  DATA_R <- normalizePath("R/data.R"); APSIM_R <- normalizePath("R/apsim.R")
+  DATA_R <- normalizePath("code/R/data.R"); APSIM_R <- normalizePath("code/R/apsim.R")
   clusterExport(cl, c("DATA_R", "APSIM_R"), envir = environment())
   clusterEvalQ(cl, {
     suppressPackageStartupMessages(library(apsimx))

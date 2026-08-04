@@ -22,13 +22,15 @@
 ## Run:  Rscript 01-get-weather-soil.R      (from simulation/)
 ## ============================================================
 
-setwd_here <- function() {
+## set the working directory to the component root (folder with code/ input/ output/)
+local({
   a <- commandArgs(FALSE); f <- grep("^--file=", a, value = TRUE)
-  if (length(f)) setwd(dirname(normalizePath(sub("^--file=", "", f[1]))))
-}
-setwd_here()
-source("config.R")
-source("R/data.R")
+  d <- if (length(f)) dirname(normalizePath(sub("^--file=", "", f[1]))) else getwd()
+  while (!file.exists(file.path(d, "code", "config.R")) && dirname(d) != d) d <- dirname(d)
+  setwd(d)
+})
+source("code/config.R")
+source("code/R/data.R")
 suppressPackageStartupMessages(library(apsimx))
 options(timeout = 300)
 

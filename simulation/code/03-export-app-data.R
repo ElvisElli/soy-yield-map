@@ -43,14 +43,20 @@ find_root <- function() {
 ROOT <- find_root()
 message("[export] repo root: ", ROOT)
 
-IN_RDS  <- file.path(ROOT, "simulation", "data", "outputs", "simulated-scenarios-df.rds")
-CROP    <- file.path(ROOT, "simulation", "data", "raw", "cropland")
+IN_RDS  <- file.path(ROOT, "simulation", "output", "simulated-scenarios-df.rds")
+CROP    <- file.path(ROOT, "simulation", "input", "cropland")
 STATE_SHP    <- file.path(CROP, "cb_2018_us_state_20m", "cb_2018_us_state_20m.shp")
 COUNTY_SHP   <- file.path(CROP, "Elvis-Crop-Data", "Arkansas_Counties_4269.shp")
-OUT_CSV <- file.path(ROOT, "app", "data", "yield-surface.csv")
-OUT_META<- file.path(ROOT, "app", "data", "yield-surface-meta.json")
-OUT_STATE   <- file.path(ROOT, "app", "data", "ar-state.csv")
-OUT_COUNTY  <- file.path(ROOT, "app", "data", "ar-counties.csv")
+
+## A test subset (master run.R sets SOY_N_CELLS) must NOT overwrite the real app
+## data — write it to output/ instead. Only a full run publishes to app/data.
+IS_TEST <- nzchar(Sys.getenv("SOY_N_CELLS"))
+DEST    <- if (IS_TEST) file.path(ROOT, "simulation", "output") else file.path(ROOT, "app", "data")
+if (IS_TEST) message("[export] TEST run — writing to simulation/output/ (app data untouched)")
+OUT_CSV <- file.path(DEST, "yield-surface.csv")
+OUT_META<- file.path(DEST, "yield-surface-meta.json")
+OUT_STATE   <- file.path(DEST, "ar-state.csv")
+OUT_COUNTY  <- file.path(DEST, "ar-counties.csv")
 
 if (!file.exists(IN_RDS)) {
   stop("Simulation results not found:\n  ", IN_RDS,

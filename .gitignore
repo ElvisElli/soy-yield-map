@@ -1,13 +1,18 @@
 # ── Large simulation inputs/outputs (produced by Component 1, not versioned) ──
 # The APSIM grid results are big (~30 MB) and machine-produced. Only the small
 # aggregated app/data/yield-surface.csv is committed.
-simulation/data/outputs/simulated-scenarios-df.rds
-simulation/data/outputs/checkpoints/
-simulation/data/outputs/apsim-work/
-simulation/data/outputs/*.log
-simulation/data/raw/weather/
-simulation/data/raw/soil/
-simulation/intermediate-data/
+# Input caches — downloaded once, big; not versioned
+simulation/input/weather/
+simulation/input/soil/
+current_season/input/weather/
+# Pipeline outputs — regenerated; inspect locally in output/plots/
+**/output/*.rds
+**/output/*.csv
+**/output/*.json
+**/output/*.log
+**/output/checkpoints/
+**/output/apsim-work/
+**/output/plots/*.png
 
 # ── R session / IDE cruft ────────────────────────────────────────────────
 .Rhistory
@@ -31,6 +36,3 @@ Rplots.pdf
 .DS_Store
 Thumbs.db
 
-# In-season pipeline local cache (weather + APSIM outputs are regenerated weekly)
-current_season/data/weather/
-current_season/data/outputs/

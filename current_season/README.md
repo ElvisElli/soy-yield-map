@@ -11,31 +11,37 @@ the reporting frequency (daily, not annual) differ.
 
 ## What is where
 
+Three folders — **`code/`** (scripts), **`input/`** (data in), **`output/`**
+(results out):
+
 ```
-config.R                ← THE ONE FILE YOU EDIT (year, scenario, thresholds)
-01-get-weather.R        → data/weather/<cellid>.met  (this year, NASA POWER daily)
-                          soil is REUSED from ../simulation/data/raw/soil
-02-run-apsim.R          → data/outputs/soil-water-daily.rds  (daily, parallel)
-03-export-app-data.R    → ../app/data/soil-water.csv  (latest day per cell)
-run-all.R               runs 01 → 02 → 03
-R/soil.R                grid loader + soil conditioning (matches ../simulation)
-R/apsim.R               build & run one daily simulation
-templates/soybean-daily.apsimx   the historical template, re-reported DAILY
+code/config.R              ← THE ONE FILE YOU EDIT (year, scenario, thresholds)
+code/01-get-weather.R      → input/weather/<cellid>.met  (this year, MERGED onto
+                             the historical 1985–2025 .met from ../simulation)
+                             soil is REUSED from ../simulation/input/soil
+code/02-run-apsim.R        → output/soil-water-daily.rds  (daily, parallel)
+code/03-export-app-data.R  → ../app/data/soil-water.csv  (latest day per cell)
+code/04-inspect.R          → output/plots/  ← CHECK RESULTS HERE (soil-water map)
+code/run-all.R             runs 01 → 02 → 03 → 04
+code/R/                    grid loader + soil conditioning + daily run helpers
+input/templates/soybean-daily.apsimx   the historical template, re-reported DAILY
 ```
 
 ## Running it
 
 ```bash
-# once, so soils exist (this pipeline reuses them):
-cd ../simulation && Rscript 01-get-weather-soil.R && cd ../current_season
-
+# once, so the historical weather + soils exist (this pipeline reuses them):
+#   run ../simulation first (RUN_HISTORICAL in ../run.R)
 # then, from current_season/:
-Rscript run-all.R                 # quick test first: set N_CELLS <- 5 in config.R
+Rscript code/run-all.R            # quick test first: set N_CELLS <- 5 in code/config.R
 ```
 
-Nothing is machine-specific — APSIM is auto-detected and the weather downloads
-itself. `run-all.R` overwrites this season's weather each run, so the season
-grows through the year.
+Only the **current year** is downloaded each run and **merged** onto the cached
+historical record — the 40-year history is never re-fetched. Because the weather
+is continuous, the daily run spins up from `SPINUP_YEARS` before Jan 1 so soil
+moisture starts realistically (set in `code/config.R`). Nothing is
+machine-specific; APSIM is auto-detected. A test run (`N_CELLS`) writes to
+`output/`, leaving the app data untouched.
 
 ## Schedule
 

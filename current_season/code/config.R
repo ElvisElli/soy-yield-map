@@ -35,6 +35,11 @@
 CURRENT_YEAR <- as.integer(format(Sys.Date(), "%Y"))
 ## NASA POWER lags a few days; don't request weather past this.
 POWER_LATENCY_DAYS <- 3L
+## Years of spin-up before the current season. Because the weather is merged with
+## the historical record, the daily run can start earlier so soil moisture is
+## realistic on Jan 1 (instead of resetting to field capacity). 1 = start last
+## year; 0 = current year only (fastest).
+SPINUP_YEARS <- 1L
 
 
 ## ── SCENARIO (the "typical field" we track) ──────────────────────────────
@@ -68,7 +73,7 @@ SW_ADEQUATE_MAX <- 70    # <= 70%  → "Adequate";  above → "Excess"
 
 
 ## ── GRID (which fields to simulate) ──────────────────────────────────────
-GRID_FILE <- "../simulation/data/raw/sim-grid.rds"
+GRID_FILE <- "../simulation/input/sim-grid.rds"
 ## NULL = every cultivated cell; an integer = first N (quick test); a vector = cellids.
 N_CELLS   <- NULL
 ## The master run.R can force a small test subset without editing the line above.
@@ -81,8 +86,9 @@ CHUNK_SIZE <- 50L
 
 
 ## ── PATHS ────────────────────────────────────────────────────────────────
-TEMPLATE     <- "templates/soybean-daily.apsimx"
-WEATHER_DIR  <- "data/weather"                    # this year's .met (own cache)
-SOIL_DIR     <- "../simulation/data/raw/soil"     # REUSE historical conditioned soil
-OUT_DIR      <- "data/outputs"
+TEMPLATE     <- "input/templates/soybean-daily.apsimx"
+WEATHER_DIR  <- "input/weather"                   # this year merged with history
+SOIL_DIR     <- "../simulation/input/soil"        # REUSE historical conditioned soil
+HIST_WEATHER_DIR <- "../simulation/input/weather" # historical .met to merge onto
+OUT_DIR      <- "output"
 CHECKPOINTS  <- file.path(OUT_DIR, "checkpoints")

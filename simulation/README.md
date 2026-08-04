@@ -7,39 +7,34 @@ set of scenarios, and aggregates the results.
 
 ## What is where
 
+Three folders — **`code/`** (scripts), **`input/`** (data in), **`output/`**
+(results out):
+
 ```
-config.R                ← THE ONE FILE YOU EDIT (scenarios, root params,
-                          grid size, years, cores) — start here
-01-get-weather-soil.R   → data/raw/weather/<cellid>.met   (NASA POWER)
-                          data/raw/soil/<cellid>.rds      (USDA SSURGO, conditioned)
-                          ↑ ALL soil adaptations (KS, KL, XF, initial water) live
-                            in condition_soil() here, so the cached .rds is FINAL
-02-run-apsim.R          → data/outputs/simulated-scenarios-df.rds
-03-export-app-data.R    → ../app/data/yield-surface.csv (+ ar-state/ar-counties)
-get-nass-yields.R       → ../app/data/nass-county-yield.csv (county benchmark)
-run-all.R               → runs 01 → 02 → 03
-R/data.R                → load the cropland grid (tiny helper)
-R/apsim.R               → build & run one APSIM file (helper)
-templates/…apsimx       → APSIM soybean template (MG4/MG5/MG6 cultivars)
+code/config.R              ← THE ONE FILE YOU EDIT (scenarios, root params,
+                             grid size, years 1985–2025, cores) — start here
+code/01-get-weather-soil.R → input/weather/<cellid>.met   (NASA POWER, 1985–2025)
+                             input/soil/<cellid>.rds       (USDA SSURGO, conditioned)
+                             ↑ ALL soil adaptations (KS, KL, XF, initial water) live
+                               in condition_soil() here, so the cached .rds is FINAL
+code/02-run-apsim.R        → output/simulated-scenarios-df.rds
+code/03-export-app-data.R  → ../app/data/yield-surface.csv (+ ar-state/ar-counties)
+code/04-inspect.R          → output/plots/  ← CHECK RESULTS HERE (yield map + hist)
+code/run-all.R             → runs 01 → 02 → 03 → 04
+code/get-nass-yields.R     → ../app/data/nass-county-yield.csv (county benchmark)
+code/R/                    → load-grid + build/run helpers
+input/templates/…apsimx    → APSIM soybean template (MG4/MG5/MG6 cultivars)
 ```
 
-**To run it on your computer:** install APSIM Next Gen (auto-detected — nothing
-to configure) and the R packages below, then `Rscript run-all.R`. Nothing is
-machine-specific. For a fast trial first, set `N_CELLS <- 5` in `config.R`.
-
-Run the whole thing, or one step at a time:
-
-```bash
-Rscript run-all.R                 # everything
-# or
-Rscript 01-get-weather-soil.R
-Rscript 02-run-apsim.R
-Rscript 03-export-app-data.R
-```
+**To run it on your computer:** open `simulation.Rproj` (or use the master
+`../run.R`), install APSIM Next Gen (auto-detected) + the R packages below, then
+`Rscript code/run-all.R`. Nothing is machine-specific. For a fast trial first set
+`N_CELLS <- 5` in `code/config.R` (a test writes to `output/`, leaving the app
+data untouched).
 
 Every step is **resumable**: cached weather/soil are reused, and APSIM results
-are checkpointed per chunk of cells (`data/outputs/checkpoints/`), so an
-interrupted run continues where it left off.
+are checkpointed per chunk (`output/checkpoints/`). When done, open
+`output/plots/inspect-yield-map.png` to confirm it worked.
 
 ## Editing scenarios (`config.R`)
 

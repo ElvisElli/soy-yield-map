@@ -10,19 +10,27 @@
 ## Run:  Rscript 03-export-app-data.R      (from current_season/)
 ## ============================================================
 
-setwd_here <- function() {
+## set the working directory to the component root (folder with code/ input/ output/)
+local({
   a <- commandArgs(FALSE); f <- grep("^--file=", a, value = TRUE)
-  if (length(f)) setwd(dirname(normalizePath(sub("^--file=", "", f[1]))))
-}
-setwd_here()
-source("config.R")
+  d <- if (length(f)) dirname(normalizePath(sub("^--file=", "", f[1]))) else getwd()
+  while (!file.exists(file.path(d, "code", "config.R")) && dirname(d) != d) d <- dirname(d)
+  setwd(d)
+})
+source("code/config.R")
 suppressPackageStartupMessages({ library(dplyr); library(readr); library(sf) })
 
 ALBERS  <- 5070
 IN_RDS  <- file.path(OUT_DIR, "soil-water-daily.rds")
-COUNTY_SHP <- "../simulation/data/raw/cropland/Elvis-Crop-Data/Arkansas_Counties_4269.shp"
-OUT_CSV  <- "../app/data/soil-water.csv"
-OUT_META <- "../app/data/soil-water-meta.json"
+COUNTY_SHP <- "../simulation/input/cropland/Elvis-Crop-Data/Arkansas_Counties_4269.shp"
+
+## A test subset (master run.R sets SOY_N_CELLS) writes to output/ so it never
+## overwrites the real app data; only a full run publishes to app/data.
+IS_TEST  <- nzchar(Sys.getenv("SOY_N_CELLS"))
+DEST     <- if (IS_TEST) OUT_DIR else "../app/data"
+if (IS_TEST) message("[export] TEST run — writing to output/ (app data untouched)")
+OUT_CSV  <- file.path(DEST, "soil-water.csv")
+OUT_META <- file.path(DEST, "soil-water-meta.json")
 
 if (!file.exists(IN_RDS))
   stop("Daily results not found: ", IN_RDS, "\nRun 01 then 02 first.")

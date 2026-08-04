@@ -9,21 +9,23 @@
 ## Run:  Rscript 02-run-apsim.R      (from current_season/)
 ## ============================================================
 
-setwd_here <- function() {
+## set the working directory to the component root (folder with code/ input/ output/)
+local({
   a <- commandArgs(FALSE); f <- grep("^--file=", a, value = TRUE)
-  if (length(f)) setwd(dirname(normalizePath(sub("^--file=", "", f[1]))))
-}
-setwd_here()
-source("config.R")
-source("R/soil.R")
-source("R/apsim.R")
+  d <- if (length(f)) dirname(normalizePath(sub("^--file=", "", f[1]))) else getwd()
+  while (!file.exists(file.path(d, "code", "config.R")) && dirname(d) != d) d <- dirname(d)
+  setwd(d)
+})
+source("code/config.R")
+source("code/R/soil.R")
+source("code/R/apsim.R")
 suppressPackageStartupMessages({ library(parallel); library(foreach); library(doParallel) })
 
 exe <- init_apsim()
 message("[02] APSIM: ", exe)
 dir.create(CHECKPOINTS, recursive = TRUE, showWarnings = FALSE)
 
-DATE_START <- sprintf("%d-01-01", CURRENT_YEAR)
+DATE_START <- sprintf("%d-01-01", CURRENT_YEAR - SPINUP_YEARS)   # spin-up from merged history
 DATE_END   <- as.character(Sys.Date() - POWER_LATENCY_DAYS)
 
 cells <- load_grid(GRID_FILE, N_CELLS)
@@ -35,7 +37,7 @@ cl <- NULL
 if (N_CORES > 1L) cl <- tryCatch(makeCluster(N_CORES, type = "PSOCK"), error = function(e) NULL)
 if (!is.null(cl)) {
   registerDoParallel(cl)
-  SOIL_R <- normalizePath("R/soil.R"); APSIM_R <- normalizePath("R/apsim.R")
+  SOIL_R <- normalizePath("code/R/soil.R"); APSIM_R <- normalizePath("code/R/apsim.R")
   clusterExport(cl, c("SOIL_R", "APSIM_R"), envir = environment())
   clusterEvalQ(cl, {
     suppressPackageStartupMessages(library(apsimx))
