@@ -30,3 +30,7 @@ Rplots.pdf
 # ── OS ───────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+# In-season pipeline local cache (weather + APSIM outputs are regenerated weekly)
+current_season/data/weather/
+current_season/data/outputs/

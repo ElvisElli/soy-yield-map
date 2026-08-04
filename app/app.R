@@ -80,64 +80,117 @@ COUNTY_LINE <- poly_na(COUNTY_DF)
 STATE_BB <- list(lng = range(STATE_DF$x) + c(-.pad, .pad),
                  lat = range(STATE_DF$y) + c(-.pad, .pad))
 
+## ── In-season soil-water surface (optional; produced by current_season/) ──
+## Class colours match the study's moisture maps. If the file is absent (the
+## weekly run hasn't produced it yet) the In-season tab shows a friendly notice.
+SW_COLORS       <- c(Dry = "#de2d26", Adequate = "#31a354", Excess = "#253494")
+SW_DRY_MAX      <- 40      # rel. soil water % thresholds (match current_season/config.R)
+SW_ADEQUATE_MAX <- 70
+SW_DEPTHS       <- c("Top 6 in" = "rel_sw_6in",
+                     "Top 12 in" = "rel_sw_12in",
+                     "Top 24 in" = "rel_sw_24in")
+SOILWATER <- tryCatch(read.csv("data/soil-water.csv", stringsAsFactors = FALSE),
+                      error = function(e) NULL)
+SW_META   <- tryCatch(paste(readLines("data/soil-water-meta.json", warn = FALSE),
+                            collapse = " "), error = function(e) "")
+SW_LAST_UPDATE <- if (nzchar(SW_META))
+  sub('.*"last_update":\\s*"([^"]+)".*', "\\1", SW_META) else NA
+sw_classify <- function(rel) {
+  pct <- rel * 100
+  factor(ifelse(pct <= SW_DRY_MAX, "Dry",
+         ifelse(pct <= SW_ADEQUATE_MAX, "Adequate", "Excess")),
+         levels = c("Dry", "Adequate", "Excess"))
+}
+
 ## ── UI ───────────────────────────────────────────────────────────────────
-ui <- page_sidebar(
-  title = "Arkansas Soybean Yield-Gap Map",
+## Tab 1 — the yield-gap map.
+tab_yieldgap <- nav_panel(
+  title = "Yield-gap map",
+  layout_sidebar(
+    sidebar = sidebar(
+      width = 340,
+      h5("Your field"),
+      fluidRow(
+        column(6, numericInput("lat", "Latitude", value = 34.75,
+                               min = 33, max = 36.6, step = 0.01)),
+        column(6, numericInput("lon", "Longitude", value = -91.5,
+                               min = -95, max = -89.5, step = 0.01))
+      ),
+      helpText("Type coordinates or click the map to drop a pin."),
+      hr(),
+
+      h5("Your practice"),
+      selectInput("mg", "Maturity group", choices = MG_CHOICES),
+      selectInput("window", "Planting window", choices = NULL),
+      hr(),
+
+      h5("Your yield"),
+      fluidRow(
+        column(7, numericInput("myyield", "Measured yield", value = 50, min = 0)),
+        column(5, radioButtons("unit", "Units",
+                               c("bu/ac", "kg/ha"), selected = "bu/ac"))
+      ),
+      helpText("Yields shown at 13% market moisture."),
+      checkboxInput("benchmark", "Add county 5-yr NASS average", value = FALSE),
+      hr(),
+      ## Feedback — opens the visitor's email client (works on the static site).
+      tags$a(
+        href = paste0("mailto:", FEEDBACK_EMAIL,
+                      "?subject=Soybean%20Yield-Gap%20Map%20feedback"),
+        target = "_blank", rel = "noopener",
+        class = "btn btn-outline-secondary btn-sm w-100",
+        "✉ Send feedback"),
+      tags$div(class = "text-muted small mt-1 text-center",
+               "or email ",
+               tags$a(href = paste0("mailto:", FEEDBACK_EMAIL), FEEDBACK_EMAIL)),
+      helpText(textOutput("provenance", inline = TRUE))
+    ),
+    card(
+      fill = FALSE,
+      uiOutput("tiles"),
+      plotOutput("barplot", height = "260px"),
+      uiOutput("bench_note")
+    ),
+    card(
+      full_screen = TRUE,
+      leafletOutput("map", height = 520)
+    )
+  )
+)
+
+## Tab 2 — in-season soil-water tracker (current growing season, updated weekly).
+tab_inseason <- nav_panel(
+  title = "In-season soil water",
+  layout_sidebar(
+    sidebar = sidebar(
+      width = 340,
+      h5("Current-season soil water"),
+      uiOutput("sw_update"),
+      hr(),
+      radioButtons("sw_depth", "Depth", choices = SW_DEPTHS, selected = "rel_sw_6in"),
+      hr(),
+      tags$div(
+        class = "small",
+        tags$b("How wet is the soil?"), tags$br(),
+        tags$span(style = paste0("color:", SW_COLORS["Dry"]), "●"), " Dry (< 40% of plant-available water)", tags$br(),
+        tags$span(style = paste0("color:", SW_COLORS["Adequate"]), "●"), " Adequate (40–70%)", tags$br(),
+        tags$span(style = paste0("color:", SW_COLORS["Excess"]), "●"), " Excess (> 70%)"
+      ),
+      helpText("APSIM daily simulation of the current season, refreshed weekly.")
+    ),
+    card(
+      full_screen = TRUE,
+      leafletOutput("sw_map", height = 560)
+    )
+  )
+)
+
+ui <- page_navbar(
+  title = "Arkansas Soybean Tools",
   theme = bs_theme(version = 5, bootswatch = "flatly",
                    primary = "#9D2235", secondary = "#54585A"),
-
-  sidebar = sidebar(
-    width = 340,
-    h5("Your field"),
-    fluidRow(
-      column(6, numericInput("lat", "Latitude", value = 34.75,
-                             min = 33, max = 36.6, step = 0.01)),
-      column(6, numericInput("lon", "Longitude", value = -91.5,
-                             min = -95, max = -89.5, step = 0.01))
-    ),
-    helpText("Type coordinates or click the map to drop a pin."),
-    hr(),
-
-    h5("Your practice"),
-    selectInput("mg", "Maturity group", choices = MG_CHOICES),
-    selectInput("window", "Planting window", choices = NULL),
-    hr(),
-
-    h5("Your yield"),
-    fluidRow(
-      column(7, numericInput("myyield", "Measured yield", value = 50, min = 0)),
-      column(5, radioButtons("unit", "Units",
-                             c("bu/ac", "kg/ha"), selected = "bu/ac"))
-    ),
-    helpText("Yields shown at 13% market moisture."),
-    checkboxInput("benchmark", "Add county 5-yr NASS average", value = FALSE),
-    hr(),
-    ## Feedback — opens the visitor's email client (works on the static site).
-    ## target/rel let it open reliably from the WebAssembly page; the address is
-    ## also shown as plain, copyable text for devices with no mail handler.
-    ## Change FEEDBACK_EMAIL above to route feedback elsewhere.
-    tags$a(
-      href = paste0("mailto:", FEEDBACK_EMAIL,
-                    "?subject=Soybean%20Yield-Gap%20Map%20feedback"),
-      target = "_blank", rel = "noopener",
-      class = "btn btn-outline-secondary btn-sm w-100",
-      "✉ Send feedback"),
-    tags$div(class = "text-muted small mt-1 text-center",
-             "or email ",
-             tags$a(href = paste0("mailto:", FEEDBACK_EMAIL), FEEDBACK_EMAIL)),
-    helpText(textOutput("provenance", inline = TRUE))
-  ),
-
-  card(
-    fill = FALSE,
-    uiOutput("tiles"),
-    plotOutput("barplot", height = "260px"),
-    uiOutput("bench_note")
-  ),
-  card(
-    full_screen = TRUE,
-    leafletOutput("map", height = 520)
-  )
+  tab_yieldgap,
+  tab_inseason
 )
 
 ## ── Server ─────────────────────────────────────────────────────────────────
@@ -317,6 +370,62 @@ server <- function(input, output, session) {
                                    paste(meta, collapse = " ")) else "?"
     paste0("Data: APSIM NG grid simulation, ", nrow(CELLS),
            " cells. Generated ", gen, ".")
+  })
+
+  ## ── Tab 2: In-season soil-water map ──────────────────────────────────────
+  output$sw_update <- renderUI({
+    if (is.null(SOILWATER))
+      return(tags$div(class = "text-warning small",
+                      "In-season data not published yet — check back after the",
+                      " next weekly update."))
+    tags$div(class = "small",
+             "Season ", tags$b(format(Sys.Date(), "%Y")), " · last updated ",
+             tags$b(if (is.na(SW_LAST_UPDATE) || !nzchar(SW_LAST_UPDATE)) "—" else SW_LAST_UPDATE))
+  })
+
+  output$sw_map <- renderLeaflet({
+    leaflet(options = leafletOptions(minZoom = 6, maxZoom = 13)) |>
+      addProviderTiles(providers$CartoDB.Positron, group = "Map") |>
+      addProviderTiles(providers$Esri.WorldImagery, group = "Satellite") |>
+      addLayersControl(baseGroups = c("Map", "Satellite"),
+                       options = layersControlOptions(collapsed = TRUE)) |>
+      addPolylines(lng = COUNTY_LINE$lng, lat = COUNTY_LINE$lat,
+                   color = "#8a8a8a", weight = 0.6, opacity = 0.7) |>
+      addPolylines(lng = STATE_LINE$lng, lat = STATE_LINE$lat,
+                   color = "#54585A", weight = 1.6, opacity = 0.9) |>
+      fitBounds(STATE_BB$lng[1], STATE_BB$lat[1],
+                STATE_BB$lng[2], STATE_BB$lat[2]) |>
+      htmlwidgets::onRender(
+        "function(el, x) {
+           var map = this;
+           var fix = function() { map.invalidateSize(); };
+           setTimeout(fix, 300); setTimeout(fix, 1200);
+           window.addEventListener('resize', fix);
+         }")
+  })
+
+  ## Draw the soil-water classes for the selected depth (thinned + reclassified
+  ## so it stays fast and paints reliably on phones, like the yield map).
+  observe({
+    if (is.null(SOILWATER)) return(NULL)
+    col <- input$sw_depth; req(col %in% names(SOILWATER))
+    d <- data.frame(x = SOILWATER$x, y = SOILWATER$y, rel = SOILWATER[[col]])
+    d <- d[is.finite(d$rel), , drop = FALSE]
+    if (!nrow(d)) return(NULL)
+    res <- 0.06
+    agg <- aggregate(d$rel, list(x = round(d$x / res) * res, y = round(d$y / res) * res),
+                     mean, na.rm = TRUE)
+    names(agg)[3] <- "rel"
+    agg$col <- unname(SW_COLORS[as.character(sw_classify(agg$rel))])
+    leafletProxy("sw_map", data = agg) |>
+      clearGroup("sw") |>
+      removeControl("sw-legend") |>
+      addCircleMarkers(group = "sw", lng = ~x, lat = ~y, radius = 6,
+                       stroke = FALSE, fillOpacity = 0.9, fillColor = ~col,
+                       options = pathOptions(interactive = FALSE)) |>
+      addLegend("bottomright", layerId = "sw-legend",
+                colors = unname(SW_COLORS), labels = names(SW_COLORS),
+                title = "Soil water", opacity = 0.9)
   })
 }
 
