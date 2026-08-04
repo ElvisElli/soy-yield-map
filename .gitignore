@@ -36,3 +36,7 @@ Rplots.pdf
 .DS_Store
 Thumbs.db
 
+
+# Research-station caches (regenerated; only the compact CSV is committed)
+current_season/input/stations-weather/
+current_season/input/stations-soil/
