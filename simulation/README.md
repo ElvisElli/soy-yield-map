@@ -5,19 +5,27 @@ the app consumes. It downloads its own weather and soil, runs APSIM across the
 Arkansas cropland grid (~4,651 cultivated cells, 1985–2024) for a configurable
 set of scenarios, and aggregates the results.
 
-## Pipeline
+## What is where
 
 ```
-config.R                ← the one file you edit (scenarios, grid, years, cores)
+config.R                ← THE ONE FILE YOU EDIT (scenarios, root params,
+                          grid size, years, cores) — start here
 01-get-weather-soil.R   → data/raw/weather/<cellid>.met   (NASA POWER)
-                          data/raw/soil/<cellid>.rds      (USDA SSURGO)
+                          data/raw/soil/<cellid>.rds      (USDA SSURGO, conditioned)
+                          ↑ ALL soil adaptations (KS, KL, XF, initial water) live
+                            in condition_soil() here, so the cached .rds is FINAL
 02-run-apsim.R          → data/outputs/simulated-scenarios-df.rds
 03-export-app-data.R    → ../app/data/yield-surface.csv (+ ar-state/ar-counties)
 get-nass-yields.R       → ../app/data/nass-county-yield.csv (county benchmark)
 run-all.R               → runs 01 → 02 → 03
-R/data.R, R/apsim.R     → helper library (download, build, run)
+R/data.R                → load the cropland grid (tiny helper)
+R/apsim.R               → build & run one APSIM file (helper)
 templates/…apsimx       → APSIM soybean template (MG4/MG5/MG6 cultivars)
 ```
+
+**To run it on your computer:** install APSIM Next Gen (auto-detected — nothing
+to configure) and the R packages below, then `Rscript run-all.R`. Nothing is
+machine-specific. For a fast trial first, set `N_CELLS <- 5` in `config.R`.
 
 Run the whole thing, or one step at a time:
 
@@ -46,9 +54,31 @@ One row per scenario — add or remove rows freely:
 | `warming_C` | °C added to daily min/max temperature (0 = current)|
 | `row_spacing` | mm                                               |
 
-`config.R` also holds the grid (`N_CELLS` to subset for a quick test), the
-simulation clock (`DATE_START` / `DATE_END`), and compute settings (`N_CORES`,
-`CHUNK_SIZE`).
+`config.R` also holds the root parameters (`KL_VEC` / `XF_VEC`), the grid
+(`N_CELLS` to subset for a quick test), the simulation clock (`DATE_START` /
+`DATE_END`), and compute settings (`N_CORES`, `CHUNK_SIZE`).
+
+## Soil conditioning (`01-get-weather-soil.R`)
+
+Every raw SSURGO profile is conditioned once, at download time, so the cached
+`data/raw/soil/<cellid>.rds` is the **final, ready-to-simulate** profile. All of
+this is in `condition_soil()` — ported verbatim from the climate-change study's
+`01-simulation.R`:
+
+| Step | What it does |
+|------|--------------|
+| **KS** | saturated hydraulic conductivity decreases with depth |
+| **fix** | reconcile SAT / bulk density / DUL (`apsimx`) |
+| **KL** | root water-extraction per layer, depth-decaying (`KL_VEC`) |
+| **XF** | root exploration factor per layer / rooting-depth cap (`XF_VEC`) |
+| initial water | profile starts each season at drained upper limit |
+| crops | ensures Soybean / Wheat / Maize are present |
+
+`KL_VEC` and `XF_VEC` are baked into the profile's crop columns
+(`Soybean.KL`, `Soybean.XF`, …), so `02` writes them straight into each APSIM
+file — no separate edit step. **If you change any soil setting, delete
+`data/raw/soil/` so profiles are re-conditioned on the next run** (cached cells
+are otherwise reused).
 
 ## Installing APSIM
 
