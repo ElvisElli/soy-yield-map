@@ -67,7 +67,7 @@ points in `config.R`).
 
 ## Required R packages
 
-`apsimx`, `nasapower`, `soilDB`, `sf`, `dplyr`, `readr`, `parallel`,
+`apsimx`, `nasapower`, `soilDB`, `sf`, `dplyr`, `readr`, `ggplot2`, `parallel`,
 `doParallel`, `foreach`.
 
 ## Data sources

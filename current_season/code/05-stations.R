@@ -21,7 +21,7 @@ local({
   setwd(d)
 })
 source("code/config.R"); source("code/R/soil.R"); source("code/R/apsim.R")
-suppressPackageStartupMessages({ library(apsimx); library(dplyr); library(tidyr) })
+suppressPackageStartupMessages({ library(apsimx); library(dplyr) })
 options(timeout = 600)
 
 exe <- init_apsim()
@@ -87,8 +87,9 @@ daily$CummRain_fromApril <- daily$CummRain_fromApril / 25.4   # mm → inches
 names(daily)[names(daily) == "CummRain_fromApril"] <- "CummRain_in"
 VARS <- c("rel_sw_6in", "rel_sw_12in", "rel_sw_24in", "CummRain_in", "Biomass_kgha")
 
-long <- daily |>
-  tidyr::pivot_longer(all_of(VARS), names_to = "variable", values_to = "value")
+long <- do.call(rbind, lapply(VARS, function(v)
+  data.frame(station = daily$station, year = daily$year, doy = daily$doy,
+             variable = v, value = daily[[v]], stringsAsFactors = FALSE)))
 hist <- long |>
   dplyr::filter(year < CURRENT_YEAR) |>
   dplyr::group_by(station, variable, doy) |>
